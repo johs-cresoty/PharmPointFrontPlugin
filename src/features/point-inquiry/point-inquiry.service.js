@@ -1,0 +1,39 @@
+/**
+ * PointInquiryService — 포인트 조회 서비스
+ *
+ * Android: CatposCloudApi.getCustomer
+ * 의존: PharmHttpClient, ApiConfig
+ */
+window.PointInquiryService = (function () {
+
+  /**
+   * 포인트 잔액 조회
+   * GET /api/terminals/customers
+   * @param {string} phone - 11자리 전화번호
+   * @returns {Promise<{success: boolean, customer?: object, error?: string}>}
+   */
+  async function getPointBalance(phone) {
+    const json = await PharmHttpClient.get('/api/terminals/customers', {
+      TAXNO:      ApiConfig.taxNo,
+      CST_HP:     phone,
+      CMPTR_NAME: ApiConfig.cmptrName,
+      POS_VER:    ApiConfig.posVer,
+    });
+
+    if (json.CODE === '0000' && json.DATA?.LIST?.length > 0) {
+      const dto = json.DATA.LIST[0];
+      return {
+        success: true,
+        customer: {
+          customerCode:  dto.CST_CODE ?? '',
+          customerName:  dto.CST_NAME ?? '',
+          customerPhone: dto.CST_HP   ?? '',
+          pointBalance:  parseInt(dto.PNT_AMT, 10) || 0,
+        },
+      };
+    }
+    return { success: false, error: '등록된 회원이 아닙니다.' };
+  }
+
+  return { getPointBalance };
+})();

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="stylesheet"
+      href="https://static.toss.im/tds/43.9.4/css/tds.min.css"
+    />
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="https://static.toss.im/tps/main.css"
+    />
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="https://static.toss.im/tps/others.css"
+    />
+    <link rel="stylesheet" type="text/css" href="./global.css" />
+    <script src="https://cdn.tossplace.com/toss-front-sdk/v0/index.js"></script>
+    <script src="./sdk.js"></script>
+    <title>이용방침 동의</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      sdk.template.renderAgreementPage({
+        title: '약관 동의',
+        subtitle: '포인트 서비스 이용을 위해 동의해주세요',
+        agreements: {
+          required: [
+            {
+              id: 'pharmpoint-policy',
+              title: '[필수] 포인트 이용방침 동의합니다',
+              href: 'https://catpos.co.kr/policy/pharmpoint',
+            },
+          ],
+          optional: [],
+        },
+        onSubmit: async (agreementIds) => {
+          console.log('동의한 약관:', agreementIds);
+          location.href = './member-search.html';
+        },
+      });
+    </script>
+  </body>
+</html>

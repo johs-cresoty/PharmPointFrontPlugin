@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="stylesheet"
+      href="https://static.toss.im/tds/43.9.4/css/tds.min.css"
+    />
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="https://static.toss.im/tps/main.css"
+    />
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="https://static.toss.im/tps/others.css"
+    />
+    <link rel="stylesheet" type="text/css" href="./global.css" />
+    <script src="https://cdn.tossplace.com/toss-front-sdk/v0/index.js"></script>
+    <script src="./sdk.js"></script>
+    <title>조회 결과</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      const raw = sessionStorage.getItem('pharm_lookup_result');
+      const data = raw ? JSON.parse(raw) : null;
+      sessionStorage.removeItem('pharm_lookup_result');
+
+      const goHome = () => {
+        location.href = './home.html';
+      };
+      const goSearch = () => {
+        location.href = './member-search.html';
+      };
+
+      if (data && data.success && data.customer) {
+        const { customerName, pointBalance } = data.customer;
+        sdk.template.renderResultPage({
+          type: 'image',
+          status: 'success',
+          title: '현재 보유하고 있는 포인트입니다.',
+          description: `${customerName}님 / 보유 포인트: ${pointBalance.toLocaleString()}P`,
+        timerMs: 5000,
+        buttons: [
+          {
+            label: '처음으로',
+            closeOnClick: true,
+              onClick: goHome,
+          },
+        ],
+          onTimeout: goHome,
+          localeCode: 'ko',
+        });
+      } else {
+        sdk.template.renderResultPage({
+          type: 'image',
+          status: 'error',
+          title: data?.error || '등록된 회원이 없습니다.',
+          description: '전화번호를 다시 확인해주세요',
+          timerMs: 5000,
+          buttons: [
+            {
+              label: '다시 입력',
+              closeOnClick: true,
+              onClick: goSearch,
+            },
+            {
+              label: '처음으로',
+              closeOnClick: true,
+              onClick: goHome,
+            },
+          ],
+          onTimeout: goHome,
+        localeCode: 'ko',
+      });
+      }
+    </script>
+  </body>
+</html>

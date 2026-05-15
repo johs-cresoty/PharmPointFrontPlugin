@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.tosspayments.com)",
+      "Bash(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\USER\\\\WebProjects\\\\PharmPointFrontPlugin\\\\src\\\\shared\\\\constants\")",
+      "Bash(Out-Null)",
+      "Bash(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\USER\\\\WebProjects\\\\PharmPointFrontPlugin\\\\src\\\\shared\\\\utils\")",
+      "Bash(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\USER\\\\WebProjects\\\\PharmPointFrontPlugin\\\\src\\\\shared\\\\http\")",
+      "Bash(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\USER\\\\WebProjects\\\\PharmPointFrontPlugin\\\\src\\\\features\\\\point-inquiry\")",
+      "Bash(Write-Host \"done\")",
+      "PowerShell(New-Item *)"
+    ]
+  }
+}

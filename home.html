@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="stylesheet"
+      href="https://static.toss.im/tds/43.9.4/css/tds.min.css"
+    />
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="https://static.toss.im/tps/main.css"
+    />
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="https://static.toss.im/tps/others.css"
+    />
+    <link rel="stylesheet" type="text/css" href="./global.css" />
+    <script src="https://cdn.tossplace.com/toss-front-sdk/v0/index.js"></script>
+    <script src="./sdk.js"></script>
+    <title>Order Example - Toss Front SDK</title>
+  </head>
+<body>
+  <div id="app"></div>
+  <script>
+    sdk.template.renderIdlePage({
+      type: 'oneButton',
+      button: {
+        text: '포인트 조회',
+        onClick: () => {
+          location.href = './agreement.html';
+        },
+      },
+    });
+  </script>
+</body>
+</html>

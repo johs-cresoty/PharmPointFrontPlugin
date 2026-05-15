@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="stylesheet"
+      href="https://static.toss.im/tds/43.9.4/css/tds.min.css"
+    />
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="https://static.toss.im/tps/main.css"
+    />
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="https://static.toss.im/tps/others.css"
+    />
+    <link rel="stylesheet" type="text/css" href="./global.css" />
+    <script src="https://cdn.tossplace.com/toss-front-sdk/v0/index.js"></script>
+    <script src="./sdk.js"></script>
+    <script src="./src/shared/utils/crypt.js"></script>
+    <script src="./src/shared/constants/api-config.js"></script>
+    <script src="./src/shared/http/http-client.js"></script>
+    <script src="./src/features/point-inquiry/point-inquiry.service.js"></script>
+    <title>전화번호 입력</title>
+  </head>
+<body>
+  <div id="app"></div>
+  <script>
+      sdk.template.renderInputPage({
+        type: 'phone',
+        top: {
+          title: '휴대폰 번호 입력하고 포인트 확인하세요.',
+          subtitle: '약국 이름',
+        },
+        disclaimer: '포인트 조회 외 다른 용도로 사용하지 않아요.',
+        input: {
+          placeholder: '전화번호 입력',
+          onChange: (value) => {
+            console.log('입력 중:', value);
+          },
+        },
+        onSubmit: async (phone) => {
+          try {
+            const result = await PointInquiryService.getPointBalance(phone);
+            sessionStorage.setItem(
+              'pharm_lookup_result',
+              JSON.stringify({ phone, ...result })
+            );
+          } catch (err) {
+            console.error('포인트 조회 실패:', err);
+            sessionStorage.setItem(
+              'pharm_lookup_result',
+              JSON.stringify({
+                phone,
+                success: false,
+                error: `조회 중 오류가 발생했습니다. (${err.message})`,
+              })
+            );
+          }
+          location.href = './result.html';
+        },
+        onBack: () => {
+          location.href = './home.html';
+        },
+      });
+  </script>
+</body>
+</html>
