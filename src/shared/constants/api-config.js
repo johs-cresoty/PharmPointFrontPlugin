@@ -7,6 +7,7 @@ window.ApiConfig = (function () {
     baseUrl:   isDev ? BASE_URL_DEV : BASE_URL_PROD,
     cmptrName: 'TossFront_Plugin',
     posVer:    '1.0.0',
+    posGubn:   'CP',
     taxNo:     '2018182695',
   });
 })();

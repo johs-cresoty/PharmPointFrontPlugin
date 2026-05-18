@@ -44,7 +44,7 @@
         },
         onSubmit: async (phone) => {
           try {
-            const result = await PointInquiryService.getPointBalance(phone);
+            const result = await PointInquiryService.getCustomer(phone);
             sessionStorage.setItem(
               'pharm_lookup_result',
               JSON.stringify({ phone, ...result })
@@ -63,7 +63,7 @@
           location.href = './result.html';
         },
         onBack: () => {
-          location.href = './home.html';
+          location.href = './agreement.html';
         },
       });
   </script>
