@@ -106,8 +106,8 @@ window.AppSession = (function () {
       handlers.onCatDisconnect?.();
     });
 
-    reg(E.CatEarnPointSingle, ({ fields }) => {
-      const td = TransactionParserService.parseCatSingle(fields);
+    reg(E.CatEarnPointSingle, ({ data }) => {
+      const td = TransactionParserService.parseCatSingle(data);
       handlers.onNavigateToSavePoint?.({
         source:      PointUseSource.CAT,
         paymentType: 'SINGLE',
@@ -115,8 +115,8 @@ window.AppSession = (function () {
       });
     });
 
-    reg(E.CatEarnPointComplex, ({ fields }) => {
-      const td = TransactionParserService.parseCatComplex(fields);
+    reg(E.CatEarnPointComplex, ({ data }) => {
+      const td = TransactionParserService.parseCatComplex(data);
       handlers.onNavigateToSavePoint?.({
         source:      PointUseSource.CAT,
         paymentType: 'MULTIPLE',
@@ -124,17 +124,17 @@ window.AppSession = (function () {
       });
     });
 
-    reg(E.CatUsePointNoCustomer, ({ fields }) => {
-      const td = TransactionParserService.parseCatUsePoint(fields);
+    reg(E.CatUsePointNoCustomer, ({ data }) => {
+      const td = TransactionParserService.parseCatUsePoint(data);
       handlers.onNavigateToLookup?.({
         source:          PointUseSource.CAT,
         transactionData: td,
       });
     });
 
-    reg(E.CatUsePointWithCustomer, ({ fields }) => {
-      const balance   = parseInt(fields?.[0] ?? '0', 10) || 0;
-      const payAmount = parseInt(fields?.[1] ?? '0', 10) || 0;
+    reg(E.CatUsePointWithCustomer, ({ data }) => {
+      const balance   = parseInt(data?.balance   ?? '0', 10) || 0;
+      const payAmount = parseInt(data?.payAmount  ?? '0', 10) || 0;
       handlers.onNavigateToUsePoint?.({
         source:    PointUseSource.CAT_WITH_CUSTOMER,
         balance,

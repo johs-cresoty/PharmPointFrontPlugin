@@ -124,52 +124,45 @@ window.TransactionParserService = (function () {
   }
 
   // ── CAT ──────────────────────────────────────────────
+  // data 는 CatposCodec.parse() 결과의 data 객체
 
-  function parseCatSingle(fields) {
-    const dateTime = at(fields, 0);
-    const amount = toInt(at(fields, 3, '0'));
+  function parseCatSingle(data) {
+    const date = String(data?.trnDate ?? '');
     return {
-      trnDate:   dateTime.slice(0, 8),
-      trnTime:   dateTime.slice(8),
-      appNum:    at(fields, 1),
-      trnGubn:   normalizeGubn(at(fields, 2, 'M')),
-      payAmount: amount,
+      trnDate:   date,
+      trnTime:   '',
+      appNum:    String(data?.appNum ?? ''),
+      trnGubn:   normalizeGubn(String(data?.method ?? 'M')),
+      payAmount: toInt(String(data?.amount ?? '0')),
     };
   }
 
-  function parseCatComplex(fields) {
-    const dateTime = at(fields, 0);
-    const date = dateTime.slice(0, 8);
-    const time = dateTime.slice(8);
-    const amount1 = toInt(at(fields, 3, '0'));
-    const amount2 = toInt(at(fields, 6, '0'));
-    const first  = makePayment({
-      appNum: at(fields, 1), gubn: at(fields, 2, 'M'),
-      date, time, amount: amount1,
-    });
-    const second = makePayment({
-      appNum: at(fields, 4), gubn: at(fields, 5, 'M'),
-      date, time, amount: amount2,
-    });
+  function parseCatComplex(data) {
+    const date = String(data?.trnDate ?? '');
+    const payments = Array.isArray(data?.payments) ? data.payments : [];
+    const p0 = payments[0] || {};
+    const p1 = payments[1] || {};
+    const amount0 = toInt(String(p0.amount ?? '0'));
+    const amount1 = toInt(String(p1.amount ?? '0'));
+    const first  = makePayment({ appNum: String(p0.appNum ?? ''), gubn: String(p0.method ?? 'M'), date, time: '', amount: amount0 });
+    const second = makePayment({ appNum: String(p1.appNum ?? ''), gubn: String(p1.method ?? 'M'), date, time: '', amount: amount1 });
     return {
       trnDate:   date,
-      trnTime:   time,
+      trnTime:   '',
       appNum:    first.appNum,
       trnGubn:   first.trnGubn,
-      payAmount: amount1 + amount2,
+      payAmount: amount0 + amount1,
       payments:  [first, second],
     };
   }
 
-  function parseCatUsePoint(fields) {
-    const dateTime = at(fields, 0);
-    const amount = toInt(at(fields, 1, '0'));
+  function parseCatUsePoint(data) {
     return {
-      trnDate:   dateTime.slice(0, 8),
-      trnTime:   dateTime.slice(8),
+      trnDate:   String(data?.trnDate ?? ''),
+      trnTime:   '',
       appNum:    '',
       trnGubn:   '',
-      payAmount: amount,
+      payAmount: toInt(String(data?.payAmount ?? '0')),
     };
   }
 

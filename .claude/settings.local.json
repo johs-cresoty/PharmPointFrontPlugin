@@ -8,7 +8,8 @@
       "Bash(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\USER\\\\WebProjects\\\\PharmPointFrontPlugin\\\\src\\\\shared\\\\http\")",
       "Bash(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\USER\\\\WebProjects\\\\PharmPointFrontPlugin\\\\src\\\\features\\\\point-inquiry\")",
       "Bash(Write-Host \"done\")",
-      "PowerShell(New-Item *)"
+      "PowerShell(New-Item *)",
+      "WebFetch(domain:docs.tossplace.com)"
     ]
   }
 }

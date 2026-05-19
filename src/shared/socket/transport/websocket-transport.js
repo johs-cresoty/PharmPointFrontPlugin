@@ -44,19 +44,21 @@ window.WebSocketTransport = (function () {
 
     async function start() {
       if (state.handle) return;
+      console.log('[WS] 서버 시작 port=' + cfg.port);
       state.handle = await sdk.websocket.start({
         serverId: state.serverId,
         port:     cfg.port,
         path:     cfg.wsPath,
 
         onConnection: ({ connectionId }) => {
-          // 마지막 연결만 유지 (Android SocketManager 동일 정책)
           state.connectionId = connectionId;
+          console.log('[WS] 연결됨 connectionId=' + connectionId);
         },
 
         onMessage: ({ connectionId, data }) => {
-          state.connectionId = connectionId; // 최신화
+          state.connectionId = connectionId;
           const text = decodePayloadData(data);
+          console.log('[WS] 수신 ←', text);
           try {
             onText && onText(text);
           } catch (e) {
@@ -65,17 +67,21 @@ window.WebSocketTransport = (function () {
         },
 
         onDisconnection: ({ connectionId }) => {
+          console.log('[WS] 연결 해제 connectionId=' + connectionId);
           if (state.connectionId === connectionId) state.connectionId = null;
         },
 
         onError: (payload) => {
+          console.error('[WS] 에러', payload);
           onError && onError(payload);
         },
       });
+      console.log('[WS] 서버 시작 완료');
     }
 
     async function stop() {
       if (!state.handle) return;
+      console.log('[WS] 서버 중지');
       try {
         await state.handle.stop?.();
       } finally {
@@ -86,9 +92,10 @@ window.WebSocketTransport = (function () {
 
     async function send(text) {
       if (!state.connectionId) {
-        console.warn('[WebSocketTransport] no active connection');
+        console.warn('[WS] 송신 실패 — 연결 없음');
         return;
       }
+      console.log('[WS] 송신 →', text);
       if (state.handle?.send) {
         await state.handle.send({ data: encodeSendData(text) });
         return;

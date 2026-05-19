@@ -40,7 +40,7 @@ window.SocketGateway = (function () {
     let ws  = null;
     let ser = null;
 
-    // ── CATPOS 텍스트 수신 처리 ──────────────────────
+    // ── CATPOS JSON 수신 처리 ──────────────────────
     function onCatText(text) {
       const msg = CatposCodec.parse(text);
       if (!msg) return;
@@ -52,19 +52,19 @@ window.SocketGateway = (function () {
 
       const event = mapCatCommandToEvent(msg.command);
       if (!event) return;
-      bus.emit(event, { fields: msg.fields });
+      bus.emit(event, { data: msg.data });
     }
 
     function mapCatCommandToEvent(cmd) {
       switch (cmd) {
-        case C.CATPOS_CONNECT:                 return SocketEvent.CatConnect;
-        case C.CATPOS_NUM:                     return SocketEvent.CatRequestNum;
-        case C.CATPOS_CST:                     return SocketEvent.CatRequestCustomer;
-        case C.CATPOS_DISCONNECT:              return SocketEvent.CatDisconnect;
-        case C.CATPOS_EARN_POINT:              return SocketEvent.CatEarnPointSingle;
-        case C.CATPOS_EARN_POINT_COMPLEX:      return SocketEvent.CatEarnPointComplex;
-        case C.CATPOS_USE_POINT_NO_CUSTOMER:   return SocketEvent.CatUsePointNoCustomer;
-        case C.CATPOS_USE_POINT_WITH_CUSTOMER: return SocketEvent.CatUsePointWithCustomer;
+        case C.CATPOS_CONNECT:                      return SocketEvent.CatConnect;
+        case C.CATPOS_PHONE_INPUT_REQ:              return SocketEvent.CatRequestNum;
+        case C.CATPOS_CUSTOMER_REGISTER_REQ:        return SocketEvent.CatRequestCustomer;
+        case C.CATPOS_CANCEL:                       return SocketEvent.CatDisconnect;
+        case C.CATPOS_EARN_SINGLE_REQ:              return SocketEvent.CatEarnPointSingle;
+        case C.CATPOS_EARN_MULTI_REQ:               return SocketEvent.CatEarnPointComplex;
+        case C.CATPOS_USE_POINT_REQ:                return SocketEvent.CatUsePointNoCustomer;
+        case C.CATPOS_USE_POINT_WITH_CUSTOMER_REQ:  return SocketEvent.CatUsePointWithCustomer;
         default: return null;
       }
     }
