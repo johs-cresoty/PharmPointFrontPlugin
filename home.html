@@ -20,11 +20,22 @@
     <link rel="stylesheet" type="text/css" href="./global.css" />
     <script src="https://cdn.tossplace.com/toss-front-sdk/v0/index.js"></script>
     <script src="./sdk.js"></script>
+    <script src="./bundle.js"></script>
     <title>Order Example - Toss Front SDK</title>
   </head>
 <body>
   <div id="app"></div>
   <script>
+    AppSession.start({
+      onNavigateToSavePoint:  (args) => { console.log('[AppSession] 적립 요청', JSON.stringify(args)); },
+      onNavigateToLookup:     (args) => { console.log('[AppSession] 사용 조회 요청', JSON.stringify(args)); },
+      onNavigateToUsePoint:   (args) => { console.log('[AppSession] 사용 요청', JSON.stringify(args)); },
+      onNavigateToCatRequest: (args) => { console.log('[AppSession] CAT 입력 요청', JSON.stringify(args)); },
+      onCatDisconnect:        ()     => { console.log('[AppSession] CAT 연결 해제'); },
+    });
+
+    window.addEventListener('beforeunload', () => { AppSession.stop(); });
+
     sdk.template.renderIdlePage({
       type: 'oneButton',
       button: {

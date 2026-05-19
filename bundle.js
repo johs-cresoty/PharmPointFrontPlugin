@@ -627,20 +627,12 @@ window.WebSocketTransport = (function () {
     }
 
     async function send(text) {
-      if (!state.connectionId) {
+      if (!state.connectionId || !state.handle) {
         console.warn('[WS] 송신 실패 — 연결 없음');
         return;
       }
       console.log('[WS] 송신 →', text);
-      if (state.handle?.send) {
-        await state.handle.send({ data: encodeSendData(text) });
-        return;
-      }
-      await sdk.websocket.send({
-        serverId:     state.serverId,
-        connectionId: state.connectionId,
-        data:         encodeSendData(text),
-      });
+      await state.handle.send(state.connectionId, encodeSendData(text));
     }
 
     return { start, stop, send };
