@@ -2153,6 +2153,11 @@ window.AppConfigService = (function () {
     return { minPoint, isMinPointEnabled: enabled };
   }
 
+  async function getShowStoreName() {
+    const raw = await readString(StorageKeys.SHOW_STORE_NAME, null);
+    return raw === null || raw === undefined || raw === '' ? true : raw === 'true';
+  }
+
   const TIMEOUT_MIN_SECONDS = 3;
   const TIMEOUT_MAX_SECONDS = 10;
 
@@ -2181,6 +2186,7 @@ window.AppConfigService = (function () {
     isMinPointEnabled,
     setMinPoint,
     getPointUseConfig,
+    getShowStoreName,
     getResultTimeoutSeconds,
     getResultTimeoutMs,
     setResultTimeoutSeconds,
