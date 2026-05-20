@@ -29,19 +29,65 @@
     let _storeName = '';
     let _showStoreName = false;
 
+    // 대기 화면 매장명 오버레이 — SDK 의 OneButtonIdlePage 에는 매장명 슬롯이 없어
+    // (DefaultIdlePage 만 WallpaperBackground.Title 자동 표시) 직접 DOM 으로 추가.
+    // SDK 는 #app 안에 React 트리를 그리고, #app 자체는 viewport 보다 작은 영역(태블릿 프리뷰)일 수 있으므로
+    // viewport 기준 fixed 좌표가 아니라 #app 의 getBoundingClientRect 로 위치를 계산해야 함.
+    function positionStoreNameOverlay() {
+      const el  = document.getElementById('pharm-store-name-overlay');
+      const app = document.getElementById('app');
+      if (!el || !app) return;
+      const r = app.getBoundingClientRect();
+      // OneButtonIdlePage: FloatingButton bottom:70 + height:90 → 버튼 상단이 #app bottom 에서 ~160px 위.
+      // 매장명을 버튼 상단에서 ~80px 더 위로 배치 (총 #app bottom 에서 240px).
+      el.style.left  = `${r.left}px`;
+      el.style.width = `${r.width}px`;
+      el.style.top   = `${r.bottom - 240}px`;
+    }
+
+    function showStoreNameOverlay(name) {
+      let el = document.getElementById('pharm-store-name-overlay');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'pharm-store-name-overlay';
+        el.style.cssText = [
+          'position:fixed',
+          'text-align:center',
+          'color:#ffffff',
+          'font-size:48px',
+          'font-weight:700',
+          'letter-spacing:-1px',
+          'pointer-events:none',   // 버튼/배경 클릭 막지 않게
+          'z-index:10',
+        ].join(';');
+        document.body.appendChild(el);
+        window.addEventListener('resize', positionStoreNameOverlay);
+      }
+      el.textContent = name;
+      el.style.display = '';
+      positionStoreNameOverlay();
+    }
+
+    function hideStoreNameOverlay() {
+      const el = document.getElementById('pharm-store-name-overlay');
+      if (el) el.style.display = 'none';
+    }
+
     function renderIdle() {
       sdk.template.renderIdlePage({
         type: 'oneButton',
-        ...(_showStoreName && _storeName ? { description: { text: _storeName } } : {}),
         button: {
           text: '포인트 조회',
           onClick: () => { location.href = './agreement.html'; },
         },
       });
+      if (_showStoreName && _storeName) showStoreNameOverlay(_storeName);
+      else                              hideStoreNameOverlay();
     }
 
 
     function renderPhoneInput() {
+      hideStoreNameOverlay();
       sdk.template.renderInputPage({
         type: 'phone',
         top: {
@@ -65,6 +111,7 @@
     // CUSTOMER_REGISTER_REQ (Legacy CAT|002) — 캣포스가 회원 정보 조회를 요청.
     // Android: PhoneNumberInputViewModel.sendCATCustomerInfo → GetCustomerUseCase → sendCATCustomerInfo
     function renderCustomerLookup() {
+      hideStoreNameOverlay();
       sdk.template.renderInputPage({
         type: 'phone',
         top: {
@@ -159,7 +206,9 @@
       _showStoreName = showStoreName.status === 'fulfilled' ? showStoreName.value : false;
       _storeName     = merchant.status === 'fulfilled' ? (merchant.value?.name ?? '') : '';
 
-      if (_showStoreName && _storeName) renderIdle();
+      // 토글 ON/OFF 양쪽 모두 반영되도록 항상 재렌더
+      // (renderIdle 내부에서 _showStoreName/_storeName 조건으로 show/hide 분기)
+      renderIdle();
     })();
 
     window.addEventListener('beforeunload', () => { AppSession.stop(); });
