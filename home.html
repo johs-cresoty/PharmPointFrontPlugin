@@ -53,6 +53,7 @@
         },
         onSubmit: async (phone) => {
           await SocketGateway.sendCATPhoneNumber(phone);
+          renderIdle();
         },
         onBack: () => {
           SocketGateway.sendCATFail();
