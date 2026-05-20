@@ -62,6 +62,42 @@
       });
     }
 
+    // CUSTOMER_REGISTER_REQ (Legacy CAT|002) — 캣포스가 회원 정보 조회를 요청.
+    // Android: PhoneNumberInputViewModel.sendCATCustomerInfo → GetCustomerUseCase → sendCATCustomerInfo
+    function renderCustomerLookup() {
+      sdk.template.renderInputPage({
+        type: 'phone',
+        top: {
+          title: '휴대폰 번호를 입력해주세요.',
+          subtitle: '회원 조회',
+        },
+        disclaimer: '등록되지 않은 회원인 경우 신규 등록됩니다.',
+        input: {
+          placeholder: '전화번호 입력',
+        },
+        onSubmit: async (phone) => {
+          const res = await PointInquiryService.getPointBalance(phone);
+          if (!res.success || !res.customer) {
+            // Android: ChangeLoading(false) 만 하고 후속 처리 없음 (재입력 가능 상태 유지).
+            // Web 일관성을 위해 토스트로 사용자 인지 — 입력 화면은 그대로 유지.
+            sdk.template.openToast({
+              message: res.error || '등록된 회원이 없습니다.',
+              icon:    'error',
+            });
+            return;
+          }
+          // Android: sendCATCustomerInfo(phone, customerCode) → "OK|{phone}|{customerCode}\r\n"
+          // → 캣포스의 다음 명령 대기 (Android WaitingScreen ≒ Web renderIdle: AppSession 이 다음 CAT 이벤트 자동 라우팅)
+          await SocketGateway.sendCATCustomerInfo(phone, res.customer.customerCode || '');
+          renderIdle();
+        },
+        onBack: () => {
+          SocketGateway.sendCATFail();
+          renderIdle();
+        },
+      });
+    }
+
     function startUsePointFlow(args) {
       // args = { source, transactionData: { payAmount, trnDate, ... } }
       sessionStorage.setItem('pharm_use_point_ctx', JSON.stringify({
@@ -102,7 +138,8 @@
       onNavigateToLookup:     (args) => { startUsePointFlow(args); },
       onNavigateToUsePoint:   (args) => { startUseWithCustomerFlow(args); },
       onNavigateToCatRequest: (args) => {
-        if (args.mode === 'CAT_REQUEST_NUM') renderPhoneInput();
+        if      (args.mode === 'CAT_REQUEST_NUM')      renderPhoneInput();
+        else if (args.mode === 'CAT_REQUEST_CUSTOMER') renderCustomerLookup();
       },
       onCatDisconnect: () => { renderIdle(); },
     });
