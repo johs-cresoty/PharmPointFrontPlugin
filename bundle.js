@@ -118,11 +118,13 @@ window.StorageKeys = Object.freeze({
   SHOW_STORE_NAME:      'settings_show_store_name',
   MIN_POINT:            'settings_min_point',
   IS_MIN_POINT_ENABLED: 'settings_is_min_point_enabled',
+  RESULT_TIMEOUT_SECONDS: 'settings_result_timeout_seconds',
 });
 
 window.StorageDefaults = Object.freeze({
   MIN_POINT:            1000,
   IS_MIN_POINT_ENABLED: true,
+  RESULT_TIMEOUT_SECONDS: 5,
 });
 
 
@@ -1822,13 +1824,22 @@ window.ResultPageService = (function () {
     return num.toLocaleString('ko-KR');
   }
 
-  function render({ type = 'text', status, title, description, text, onTimeout, timerMs, buttons }) {
+  async function resolveTimerMs(timerMs) {
+    if (Number.isFinite(timerMs)) return timerMs;
+    if (window.AppConfigService && typeof AppConfigService.getResultTimeoutMs === 'function') {
+      try { return await AppConfigService.getResultTimeoutMs(); }
+      catch (e) { console.warn('[ResultPage] timeout 조회 실패, 기본값 사용', e); }
+    }
+    return DEFAULT_TIMEOUT_MS;
+  }
+
+  async function render({ type = 'text', status, title, description, text, onTimeout, timerMs, buttons }) {
     const params = {
       type,
       title,
       description,
       onTimeout: onTimeout || (() => {}),
-      timerMs: Number.isFinite(timerMs) ? timerMs : DEFAULT_TIMEOUT_MS,
+      timerMs: await resolveTimerMs(timerMs),
       localeCode: 'ko',
     };
     if (type === 'image') params.status = status || 'success';
@@ -1903,12 +1914,23 @@ window.ResultPageService = (function () {
     });
   }
 
+  function showTimeoutSaved({ seconds, onTimeout, timerMs }) {
+    return render({
+      type:        'image',
+      status:      'success',
+      title:       '설정 완료',
+      description: `화면 대기 시간 ${seconds}초`,
+      onTimeout, timerMs,
+    });
+  }
+
   return {
     showEarnSuccess,
     showUseSuccess,
     showInsufficientPoint,
     showLookupResult,
     showMinPointSaved,
+    showTimeoutSaved,
   };
 })();
 
@@ -2122,5 +2144,36 @@ window.AppConfigService = (function () {
     return { minPoint, isMinPointEnabled: enabled };
   }
 
-  return { getMinPoint, isMinPointEnabled, setMinPoint, getPointUseConfig };
+  const TIMEOUT_MIN_SECONDS = 3;
+  const TIMEOUT_MAX_SECONDS = 10;
+
+  async function getResultTimeoutSeconds() {
+    const raw = await readString(StorageKeys.RESULT_TIMEOUT_SECONDS, null);
+    if (raw === null || raw === undefined || raw === '') return StorageDefaults.RESULT_TIMEOUT_SECONDS;
+    const n = parseInt(raw, 10);
+    if (!Number.isFinite(n)) return StorageDefaults.RESULT_TIMEOUT_SECONDS;
+    return Math.min(Math.max(n, TIMEOUT_MIN_SECONDS), TIMEOUT_MAX_SECONDS);
+  }
+
+  async function getResultTimeoutMs() {
+    return (await getResultTimeoutSeconds()) * 1000;
+  }
+
+  async function setResultTimeoutSeconds(seconds) {
+    const parsed = parseInt(seconds, 10);
+    const base = Number.isFinite(parsed) ? parsed : StorageDefaults.RESULT_TIMEOUT_SECONDS;
+    const n = Math.min(Math.max(base, TIMEOUT_MIN_SECONDS), TIMEOUT_MAX_SECONDS);
+    await writeString(StorageKeys.RESULT_TIMEOUT_SECONDS, n);
+    return n;
+  }
+
+  return {
+    getMinPoint,
+    isMinPointEnabled,
+    setMinPoint,
+    getPointUseConfig,
+    getResultTimeoutSeconds,
+    getResultTimeoutMs,
+    setResultTimeoutSeconds,
+  };
 })();

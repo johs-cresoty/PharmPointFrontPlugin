@@ -148,6 +148,12 @@
       <span class="setting-label">최소 사용 포인트</span>
       <span class="setting-value" id="min-point-value">-</span>
     </div>
+
+    <!-- 화면 대기 시간 -->
+    <div class="setting-row" id="result-timeout-row" style="cursor: pointer;">
+      <span class="setting-label">화면 대기 시간</span>
+      <span class="setting-value" id="result-timeout-value">-</span>
+    </div>
   </div>
 
   <script>
@@ -179,11 +185,17 @@
       }
 
       await refreshMinPointLabel();
+      await refreshResultTimeoutLabel();
     }
 
     async function refreshMinPointLabel() {
       const minPoint = await AppConfigService.getMinPoint();
       document.getElementById('min-point-value').textContent = fmtPoint(minPoint);
+    }
+
+    async function refreshResultTimeoutLabel() {
+      const sec = await AppConfigService.getResultTimeoutSeconds();
+      document.getElementById('result-timeout-value').textContent = `${sec}초`;
     }
 
     // 시리얼 통신 속도 변경 시 저장
@@ -270,6 +282,39 @@
     }
 
     document.getElementById('min-point-row').addEventListener('click', openMinPointGrid);
+
+    // ── 화면 대기 시간 (Grid 선택) ─────────────────
+    // SDK ResultPage 가 timerMs 를 [3,10] 초로 clamp 하므로 그 범위 내 프리셋만 노출.
+    const RESULT_TIMEOUT_PRESETS = [3, 4, 5, 7, 10];
+
+    async function applyResultTimeout(sec) {
+      const saved = await AppConfigService.setResultTimeoutSeconds(sec);
+      ResultPageService.showTimeoutSaved({
+        seconds: saved,
+        onTimeout: () => { location.href = './settings.html'; },
+      });
+    }
+
+    function buildResultTimeoutOptions(currentValue) {
+      return RESULT_TIMEOUT_PRESETS.map(v => ({
+        id:      String(v),
+        title:   v === currentValue ? `${v}초\n(현재 설정)` : `${v}초`,
+        onClick: () => applyResultTimeout(v),
+      }));
+    }
+
+    async function openResultTimeoutGrid() {
+      hideSettingsContainer();
+      const current = await AppConfigService.getResultTimeoutSeconds();
+      sdk.template.renderSelectGridPage({
+        title:    '화면 대기 시간',
+        subtitle: '설정',
+        options:  buildResultTimeoutOptions(current),
+        onBack:   () => { location.href = './settings.html'; },
+      });
+    }
+
+    document.getElementById('result-timeout-row').addEventListener('click', openResultTimeoutGrid);
 
     loadSettings();
   </script>

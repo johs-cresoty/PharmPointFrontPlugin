@@ -26,13 +26,22 @@ window.ResultPageService = (function () {
     return num.toLocaleString('ko-KR');
   }
 
-  function render({ type = 'text', status, title, description, text, onTimeout, timerMs, buttons }) {
+  async function resolveTimerMs(timerMs) {
+    if (Number.isFinite(timerMs)) return timerMs;
+    if (window.AppConfigService && typeof AppConfigService.getResultTimeoutMs === 'function') {
+      try { return await AppConfigService.getResultTimeoutMs(); }
+      catch (e) { console.warn('[ResultPage] timeout 조회 실패, 기본값 사용', e); }
+    }
+    return DEFAULT_TIMEOUT_MS;
+  }
+
+  async function render({ type = 'text', status, title, description, text, onTimeout, timerMs, buttons }) {
     const params = {
       type,
       title,
       description,
       onTimeout: onTimeout || (() => {}),
-      timerMs: Number.isFinite(timerMs) ? timerMs : DEFAULT_TIMEOUT_MS,
+      timerMs: await resolveTimerMs(timerMs),
       localeCode: 'ko',
     };
     if (type === 'image') params.status = status || 'success';
@@ -111,11 +120,26 @@ window.ResultPageService = (function () {
     });
   }
 
+  /**
+   * 화면 대기 시간 설정 완료.
+   * @param {{seconds:number, onTimeout?:()=>void, timerMs?:number}} args
+   */
+  function showTimeoutSaved({ seconds, onTimeout, timerMs }) {
+    return render({
+      type:        'image',
+      status:      'success',
+      title:       '설정 완료',
+      description: `화면 대기 시간 ${seconds}초`,
+      onTimeout, timerMs,
+    });
+  }
+
   return {
     showEarnSuccess,
     showUseSuccess,
     showInsufficientPoint,
     showLookupResult,
     showMinPointSaved,
+    showTimeoutSaved,
   };
 })();

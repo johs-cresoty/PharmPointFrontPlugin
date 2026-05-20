@@ -64,10 +64,46 @@ window.AppConfigService = (function () {
     return { minPoint, isMinPointEnabled: enabled };
   }
 
+  // ── 결과 화면 대기 시간 ─────────────────────────────
+  // SDK ResultPage 가 timerMs 를 [3, 10] 초로 clamp 함 (cdn.tossplace.com TIMER_MIN/MAX_SECONDS).
+
+  const TIMEOUT_MIN_SECONDS = 3;
+  const TIMEOUT_MAX_SECONDS = 10;
+
+  /** @returns {Promise<number>} 3~10 초 (저장 없음 → StorageDefaults.RESULT_TIMEOUT_SECONDS) */
+  async function getResultTimeoutSeconds() {
+    const raw = await readString(StorageKeys.RESULT_TIMEOUT_SECONDS, null);
+    if (raw === null || raw === undefined || raw === '') return StorageDefaults.RESULT_TIMEOUT_SECONDS;
+    const n = parseInt(raw, 10);
+    if (!Number.isFinite(n)) return StorageDefaults.RESULT_TIMEOUT_SECONDS;
+    return Math.min(Math.max(n, TIMEOUT_MIN_SECONDS), TIMEOUT_MAX_SECONDS);
+  }
+
+  /** @returns {Promise<number>} ms 단위 */
+  async function getResultTimeoutMs() {
+    return (await getResultTimeoutSeconds()) * 1000;
+  }
+
+  /**
+   * 결과 화면 대기 시간 저장.
+   * @param {number} seconds — 3~10 사이로 clamp 됨
+   * @returns {Promise<number>} 실제 저장된 초
+   */
+  async function setResultTimeoutSeconds(seconds) {
+    const parsed = parseInt(seconds, 10);
+    const base = Number.isFinite(parsed) ? parsed : StorageDefaults.RESULT_TIMEOUT_SECONDS;
+    const n = Math.min(Math.max(base, TIMEOUT_MIN_SECONDS), TIMEOUT_MAX_SECONDS);
+    await writeString(StorageKeys.RESULT_TIMEOUT_SECONDS, n);
+    return n;
+  }
+
   return {
     getMinPoint,
     isMinPointEnabled,
     setMinPoint,
     getPointUseConfig,
+    getResultTimeoutSeconds,
+    getResultTimeoutMs,
+    setResultTimeoutSeconds,
   };
 })();
