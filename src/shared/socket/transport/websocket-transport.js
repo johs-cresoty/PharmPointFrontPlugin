@@ -44,6 +44,20 @@ window.WebSocketTransport = (function () {
 
     async function start() {
       if (state.handle) return;
+
+      // 이전 세션에서 남은 고아 서버 정리
+      try {
+        const { servers } = await sdk.websocket.list();
+        for (const s of servers) {
+          if (s.serverId === cfg.wsServerId || s.port === cfg.port) {
+            console.log('[WS] 이전 서버 정리 serverId=' + s.serverId);
+            await sdk.websocket.close({ serverId: s.serverId });
+          }
+        }
+      } catch (e) {
+        console.warn('[WS] 서버 목록 정리 실패', e);
+      }
+
       console.log('[WS] 서버 시작 port=' + cfg.port);
       state.handle = await sdk.websocket.start({
         serverId: state.serverId,

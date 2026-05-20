@@ -112,6 +112,20 @@ window.ApiConfig = (function () {
 })();
 
 
+/* ===== src\shared\constants\storage-keys.js ===== */
+window.StorageKeys = Object.freeze({
+  BAUD_RATE:            'settings_baud_rate',
+  SHOW_STORE_NAME:      'settings_show_store_name',
+  MIN_POINT:            'settings_min_point',
+  IS_MIN_POINT_ENABLED: 'settings_is_min_point_enabled',
+});
+
+window.StorageDefaults = Object.freeze({
+  MIN_POINT:            1000,
+  IS_MIN_POINT_ENABLED: true,
+});
+
+
 /* ===== src\shared\http\http-client.js ===== */
 /**
  * PharmHttpClient — 암호화 인터셉터가 적용된 HTTP 클라이언트
@@ -580,6 +594,20 @@ window.WebSocketTransport = (function () {
 
     async function start() {
       if (state.handle) return;
+
+      // 이전 세션에서 남은 고아 서버 정리
+      try {
+        const { servers } = await sdk.websocket.list();
+        for (const s of servers) {
+          if (s.serverId === cfg.wsServerId || s.port === cfg.port) {
+            console.log('[WS] 이전 서버 정리 serverId=' + s.serverId);
+            await sdk.websocket.close({ serverId: s.serverId });
+          }
+        }
+      } catch (e) {
+        console.warn('[WS] 서버 목록 정리 실패', e);
+      }
+
       console.log('[WS] 서버 시작 port=' + cfg.port);
       state.handle = await sdk.websocket.start({
         serverId: state.serverId,
@@ -1865,11 +1893,22 @@ window.ResultPageService = (function () {
     });
   }
 
+  function showMinPointSaved({ minPoint, onTimeout, timerMs }) {
+    return render({
+      type:        'image',
+      status:      'success',
+      title:       '설정 완료',
+      description: `최소 사용 포인트 ${fmtPoint(minPoint)}P`,
+      onTimeout, timerMs,
+    });
+  }
+
   return {
     showEarnSuccess,
     showUseSuccess,
     showInsufficientPoint,
     showLookupResult,
+    showMinPointSaved,
   };
 })();
 
@@ -2037,4 +2076,51 @@ window.AppSession = (function () {
 })();
 
 
+/* ===== src\features\app-config\app-config.service.js ===== */
+window.AppConfigService = (function () {
 
+  async function readString(key, fallback) {
+    try {
+      const item = await sdk.storage.get({ key });
+      return item?.value ?? fallback;
+    } catch (e) {
+      console.warn('[AppConfig] read fail', key, e);
+      return fallback;
+    }
+  }
+
+  async function writeString(key, value) {
+    try {
+      await sdk.storage.set({ key, value: String(value) });
+    } catch (e) {
+      console.error('[AppConfig] write fail', key, e);
+    }
+  }
+
+  async function getMinPoint() {
+    const raw = await readString(StorageKeys.MIN_POINT, null);
+    if (raw === null || raw === undefined || raw === '') return StorageDefaults.MIN_POINT;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) && n >= 0 ? n : StorageDefaults.MIN_POINT;
+  }
+
+  async function isMinPointEnabled() {
+    const raw = await readString(StorageKeys.IS_MIN_POINT_ENABLED, null);
+    if (raw === null || raw === undefined || raw === '') return StorageDefaults.IS_MIN_POINT_ENABLED;
+    return raw === 'true';
+  }
+
+  async function setMinPoint(minPoint) {
+    const n = Math.max(0, parseInt(minPoint, 10) || 0);
+    await writeString(StorageKeys.MIN_POINT, n);
+    await writeString(StorageKeys.IS_MIN_POINT_ENABLED, n > 0);
+    return { minPoint: n, isMinPointEnabled: n > 0 };
+  }
+
+  async function getPointUseConfig() {
+    const [minPoint, enabled] = await Promise.all([getMinPoint(), isMinPointEnabled()]);
+    return { minPoint, isMinPointEnabled: enabled };
+  }
+
+  return { getMinPoint, isMinPointEnabled, setMinPoint, getPointUseConfig };
+})();

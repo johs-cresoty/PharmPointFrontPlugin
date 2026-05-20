@@ -97,10 +97,25 @@ window.ResultPageService = (function () {
     });
   }
 
+  /**
+   * 최소 사용 포인트 설정 완료.
+   * @param {{minPoint:number, onTimeout?:()=>void, timerMs?:number}} args
+   */
+  function showMinPointSaved({ minPoint, onTimeout, timerMs }) {
+    return render({
+      type:        'image',
+      status:      'success',
+      title:       '설정 완료',
+      description: `최소 사용 포인트 ${fmtPoint(minPoint)}P`,
+      onTimeout, timerMs,
+    });
+  }
+
   return {
     showEarnSuccess,
     showUseSuccess,
     showInsufficientPoint,
     showLookupResult,
+    showMinPointSaved,
   };
 })();

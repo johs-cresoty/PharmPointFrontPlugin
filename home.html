@@ -26,25 +26,68 @@
 <body>
   <div id="app"></div>
   <script>
+    function renderIdle() {
+      sdk.template.renderIdlePage({
+        type: 'oneButton',
+        button: {
+          text: '포인트 조회',
+          onClick: () => { location.href = './agreement.html'; },
+        },
+      });
+    }
+
+
+    function renderPhoneInput() {
+      sdk.template.renderInputPage({
+        type: 'phone',
+        top: {
+          title: '휴대폰 번호를 입력해주세요.',
+          subtitle: '포인트 적립/사용',
+        },
+        input: {
+          placeholder: '전화번호 입력',
+        },
+        onSubmit: async (phone) => {
+          await SocketGateway.sendCATPhoneNumber(phone);
+        },
+        onBack: () => {
+          SocketGateway.sendCATFail();
+          renderIdle();
+        },
+      });
+    }
+
+    function startUsePointFlow(args) {
+      // args = { source, transactionData: { payAmount, trnDate, ... } }
+      sessionStorage.setItem('pharm_use_point_ctx', JSON.stringify({
+        source:    args.source,
+        payAmount: args.transactionData?.payAmount ?? 0,
+        trnDate:   args.transactionData?.trnDate   ?? '',
+      }));
+      location.href = './point-use-flow.html';
+    }
+
     AppSession.start({
       onNavigateToSavePoint:  (args) => { console.log('[AppSession] 적립 요청', JSON.stringify(args)); },
-      onNavigateToLookup:     (args) => { console.log('[AppSession] 사용 조회 요청', JSON.stringify(args)); },
+      onNavigateToLookup:     (args) => { startUsePointFlow(args); },
       onNavigateToUsePoint:   (args) => { console.log('[AppSession] 사용 요청', JSON.stringify(args)); },
-      onNavigateToCatRequest: (args) => { console.log('[AppSession] CAT 입력 요청', JSON.stringify(args)); },
-      onCatDisconnect:        ()     => { console.log('[AppSession] CAT 연결 해제'); },
+      onNavigateToCatRequest: (args) => {
+        if (args.mode === 'CAT_REQUEST_NUM') renderPhoneInput();
+      },
+      onCatDisconnect: () => { renderIdle(); },
     });
+
+    // minPoint / isMinPointEnabled 초기 동기화
+    (async () => {
+      try {
+        const cfg = await AppConfigService.getPointUseConfig();
+        AppSession.setConfig(cfg);
+      } catch (e) { console.warn('[home] minPoint config load fail', e); }
+    })();
 
     window.addEventListener('beforeunload', () => { AppSession.stop(); });
 
-    sdk.template.renderIdlePage({
-      type: 'oneButton',
-      button: {
-        text: '포인트 조회',
-        onClick: () => {
-          location.href = './agreement.html';
-        },
-      },
-    });
+    renderIdle();
   </script>
 </body>
 </html>

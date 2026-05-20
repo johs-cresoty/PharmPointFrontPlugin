@@ -21,6 +21,7 @@
     <link rel="stylesheet" type="text/css" href="./global.css" />
     <script src="https://cdn.tossplace.com/toss-front-sdk/v0/index.js"></script>
     <script src="./sdk.js"></script>
+    <script src="./bundle.js"></script>
     <title>플러그인 설정 (예시)</title>
     <style>
       * {
@@ -106,10 +107,16 @@
       .toggle input:checked + .toggle-slider:before {
         transform: translateX(20px);
       }
+      /* SDK 템플릿 미렌더 상태에서 빈 #app 가 시각 공간을 차지하는 것 방지 */
+      #app:empty { display: none; }
+      /* renderSelectGridPage 옵션 title 의 \n 을 실제 줄바꿈으로 렌더 */
+      #app button { white-space: pre-line; }
     </style>
 </head>
 <body>
-  <div class="container">
+  <!-- SDK 템플릿 렌더 대상 (renderSelectGridPage / renderInputPage / renderResultPage 가 #app 안에 마운트됨) -->
+  <div id="app"></div>
+  <div class="container" id="settings-container">
     <h1>플러그인 설정 (예시)</h1>
 
     <!-- Toss SN -->
@@ -135,70 +142,135 @@
         <span class="toggle-slider"></span>
       </label>
     </div>
+
+    <!-- 최소 사용 포인트 -->
+    <div class="setting-row" id="min-point-row" style="cursor: pointer;">
+      <span class="setting-label">최소 사용 포인트</span>
+      <span class="setting-value" id="min-point-value">-</span>
+    </div>
   </div>
 
   <script>
-    const STORAGE_KEYS = {
-      BAUD_RATE: 'settings_baud_rate',
-      SHOW_STORE_NAME: 'settings_show_store_name',
-    };
+    function fmtPoint(n) {
+      const num = Number.isFinite(n) ? n : parseInt(n, 10) || 0;
+      return num.toLocaleString('ko-KR') + 'P';
+    }
 
     // 초기 설정값 로드
     async function loadSettings() {
       try {
-        // Toss SN 가져오기
-      const { serialNumber } = await sdk.app.getSerialNumber();
+        const { serialNumber } = await sdk.app.getSerialNumber();
         document.getElementById('serial-number').textContent = serialNumber;
       } catch (e) {
         document.getElementById('serial-number').textContent = '알 수 없음';
       }
 
       try {
-        // 시리얼 통신 속도 불러오기
-        const baudRateItem = await sdk.storage.get({ key: STORAGE_KEYS.BAUD_RATE });
+        const baudRateItem = await sdk.storage.get({ key: StorageKeys.BAUD_RATE });
         if (baudRateItem.value) {
           document.getElementById('baud-rate').value = baudRateItem.value;
         }
 
-        // 대기 화면 매장명 표시 설정 불러오기
-        const showStoreNameItem = await sdk.storage.get({ key: STORAGE_KEYS.SHOW_STORE_NAME });
-        // 저장된 값이 없으면 기본값 true
+        const showStoreNameItem = await sdk.storage.get({ key: StorageKeys.SHOW_STORE_NAME });
         const showStoreName = showStoreNameItem.value === null ? true : showStoreNameItem.value === 'true';
         document.getElementById('show-store-name').checked = showStoreName;
       } catch (e) {
         console.error('설정 불러오기 실패:', e);
       }
+
+      await refreshMinPointLabel();
+    }
+
+    async function refreshMinPointLabel() {
+      const minPoint = await AppConfigService.getMinPoint();
+      document.getElementById('min-point-value').textContent = fmtPoint(minPoint);
     }
 
     // 시리얼 통신 속도 변경 시 저장
     document.getElementById('baud-rate').addEventListener('change', async (e) => {
-      const baudRate = e.target.value;
       try {
-        await sdk.storage.set({
-          key: STORAGE_KEYS.BAUD_RATE,
-          value: baudRate,
-        });
-        console.log('통신 속도 저장 완료:', baudRate);
-      } catch (e) {
-        console.error('통신 속도 저장 실패:', e);
+        await sdk.storage.set({ key: StorageKeys.BAUD_RATE, value: e.target.value });
+      } catch (err) {
+        console.error('통신 속도 저장 실패:', err);
       }
     });
 
     // 대기 화면 매장명 표시 토글 변경 시 저장
     document.getElementById('show-store-name').addEventListener('change', async (e) => {
-      const showStoreName = e.target.checked;
       try {
-        await sdk.storage.set({
-          key: STORAGE_KEYS.SHOW_STORE_NAME,
-          value: String(showStoreName),
-        });
-        console.log('매장명 표시 설정 저장 완료:', showStoreName ? '표시' : '표시하지 않음');
-      } catch (e) {
-        console.error('매장명 표시 설정 저장 실패:', e);
+        await sdk.storage.set({ key: StorageKeys.SHOW_STORE_NAME, value: String(e.target.checked) });
+      } catch (err) {
+        console.error('매장명 표시 설정 저장 실패:', err);
       }
     });
 
-    // 페이지 로드 시 설정 불러오기
+    // ── 최소 사용 포인트 (Grid 선택) ─────────────────
+    const MIN_POINT_PRESETS = [0, 100, 500, 1000];
+
+    async function applyMinPoint(n) {
+      await AppConfigService.setMinPoint(n);
+      ResultPageService.showMinPointSaved({
+        minPoint: n,
+        onTimeout: () => { location.href = './settings.html'; },
+      });
+    }
+
+    /**
+     * 그리드 옵션 빌드: 프리셋 + (프리셋에 없으면) 현재값 끼워넣기 + 직접 입력.
+     * 현재값 항목 title 에 "(현재 설정)" 마킹.
+     */
+    function buildMinPointOptions(currentValue) {
+      const presetSet = new Set(MIN_POINT_PRESETS);
+      const values = [...MIN_POINT_PRESETS];
+      if (Number.isFinite(currentValue) && currentValue >= 0 && !presetSet.has(currentValue)) {
+        values.push(currentValue);
+        values.sort((a, b) => a - b);
+      }
+      const presetOptions = values.map(v => ({
+        id:      String(v),
+        title:   v === currentValue ? `${fmtPoint(v)}\n(현재 설정)` : fmtPoint(v),
+        onClick: () => applyMinPoint(v),
+      }));
+      return [
+        ...presetOptions,
+        { id: 'custom', title: '직접 입력', onClick: () => openMinPointInput() },
+      ];
+    }
+
+    function hideSettingsContainer() {
+      const el = document.getElementById('settings-container');
+      if (el) el.style.display = 'none';
+    }
+
+    async function openMinPointGrid() {
+      hideSettingsContainer();
+      const current = await AppConfigService.getMinPoint();
+      sdk.template.renderSelectGridPage({
+        title:    '최소 사용 포인트',
+        subtitle: '설정',
+        options:  buildMinPointOptions(current),
+        onBack:   () => { location.href = './settings.html'; },
+      });
+    }
+
+    function openMinPointInput() {
+      hideSettingsContainer();
+      sdk.template.renderInputPage({
+        type: 'number',
+        top:  { title: '최소 사용 포인트', subtitle: '직접 입력' },
+        input:  { placeholder: '포인트 입력' },
+        button: { label: '저장' },
+        disclaimer: '0P 입력 시 최소 사용 포인트 제한이 해제됩니다.',
+        onSubmit: async (value) => {
+          const n = Math.max(0, parseInt(value, 10) || 0);
+          await applyMinPoint(n);
+        },
+        onBack: () => openMinPointGrid(),
+      });
+    }
+
+    document.getElementById('min-point-row').addEventListener('click', openMinPointGrid);
+
     loadSettings();
   </script>
 </body>

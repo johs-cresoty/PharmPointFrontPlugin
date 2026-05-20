@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="https://static.toss.im/tds/43.9.4/css/tds.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://static.toss.im/tps/main.css" />
+    <link rel="stylesheet" type="text/css" href="https://static.toss.im/tps/others.css" />
+    <link rel="stylesheet" type="text/css" href="./global.css" />
+    <script src="https://cdn.tossplace.com/toss-front-sdk/v0/index.js"></script>
+    <script src="./sdk.js"></script>
+    <script src="./bundle.js"></script>
+    <title>포인트 사용</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      // sessionStorage 에 들어있는 USE_POINT_REQ 컨텍스트
+      //   { source: 'CAT'|'TERMINAL', payAmount: number, trnDate?: string }
+      const CTX_KEY = 'pharm_use_point_ctx';
+
+      function loadContext() {
+        try {
+          const raw = sessionStorage.getItem(CTX_KEY);
+          if (!raw) return null;
+          return JSON.parse(raw);
+        } catch (e) { return null; }
+      }
+
+      function clearContext() {
+        sessionStorage.removeItem(CTX_KEY);
+      }
+
+      async function getStoreName() {
+        try {
+          const merchant = await sdk.app.getMerchant();
+          return merchant?.name ?? '';
+        } catch (e) { return ''; }
+      }
+
+      function returnToIdle() {
+        clearContext();
+        location.href = './home.html';
+      }
+
+      function toast(message, icon) {
+        sdk.template.openToast({ message, icon });
+      }
+
+      // ── 1. 전화번호 입력 ─────────────────────────────
+      function renderPhoneStep(ctx) {
+        sdk.template.renderInputPage({
+          type: 'phone',
+          top: {
+            title: '휴대폰 번호를 입력해주세요.',
+            subtitle: '포인트 사용',
+          },
+          input: { placeholder: '전화번호 입력' },
+          onSubmit: async (phone) => {
+            const res = await PointInquiryService.getPointBalance(phone);
+            if (!res.success || !res.customer) {
+              toast(res.error || '등록된 회원이 없습니다.', 'error');
+              return;
+            }
+            await handleLookupResult({ ctx, phone, customer: res.customer });
+          },
+          onBack: () => {
+            PointUseService.cancelUse({ source: ctx.source });
+            returnToIdle();
+          },
+        });
+      }
+
+      // ── 2. 잔액 검증 → 부족하면 결과화면, 충분하면 입력화면 ─
+      async function handleLookupResult({ ctx, phone, customer }) {
+        const cfg = await AppConfigService.getPointUseConfig();
+        const balance = customer.pointBalance || 0;
+
+        // Android: PhoneNumberInputViewModel.navigateToUsePoint
+        const insufficient =
+          (cfg.isMinPointEnabled && cfg.minPoint > balance) || balance < 1;
+
+        const storeName = await getStoreName();
+
+        if (insufficient) {
+          ResultPageService.showInsufficientPoint({
+            storeName,
+            minPoint:     cfg.minPoint,
+            balancePoint: balance,
+            onTimeout: returnToIdle,
+          });
+          PointUseService.cancelUse({ source: ctx.source });
+          return;
+        }
+
+        renderUseInputStep({ ctx, phone, customer, balance, cfg, storeName });
+      }
+
+      // ── 3. 사용 포인트 입력 (renderInputPage 'number') ──
+      function renderUseInputStep({ ctx, phone, customer, balance, cfg, storeName }) {
+        const maxPoint = Math.min(balance, ctx.payAmount || balance); // min(balance, payAmount)
+
+        const disclaimer = cfg.isMinPointEnabled && cfg.minPoint > 0
+          ? `포인트는 최소 ${cfg.minPoint.toLocaleString('ko-KR')}P부터 사용 가능합니다`
+          : `사용 가능 포인트 ${maxPoint.toLocaleString('ko-KR')}P`;
+
+        sdk.template.renderInputPage({
+          type: 'number',
+          top: {
+            title:    '포인트 사용',
+            subtitle: '사용하실 포인트를 입력해주세요',
+          },
+          input:  { placeholder: '포인트 입력' },
+          button: { label: '사용하기' },
+          disclaimer,
+          onSubmit: async (value) => {
+            const raw = parseInt(String(value).replace(/[^0-9]/g, ''), 10) || 0;
+
+            // 최소 사용 포인트 미달 → 토스트
+            if (cfg.isMinPointEnabled && cfg.minPoint > 0 && raw < cfg.minPoint) {
+              toast(`${cfg.minPoint.toLocaleString('ko-KR')}P 이상 입력해주세요`, 'error');
+              return;
+            }
+            if (raw <= 0) {
+              toast('사용 포인트를 입력해주세요.', 'error');
+              return;
+            }
+
+            // PharmPoint UseReducer: input > maxPoint → maxPoint 으로 자동 보정
+            const usePoint = Math.min(raw, maxPoint);
+            if (usePoint < raw) {
+              toast(`최대 ${maxPoint.toLocaleString('ko-KR')}P까지 사용 가능합니다`, 'error');
+            }
+
+            await PointUseService.relayUseResult({
+              source:       ctx.source,
+              phone,
+              customerCode: customer.customerCode,
+              balance,
+              usePoint,
+            });
+
+            ResultPageService.showUseSuccess({
+              usePoint,
+              storeName,
+              remainingPoint: PointUseService.remainingPoint(balance, usePoint),
+              onTimeout: returnToIdle,
+            });
+            clearContext();
+          },
+          onBack: () => {
+            PointUseService.cancelUse({ source: ctx.source });
+            returnToIdle();
+          },
+        });
+      }
+
+      // ── entry ───────────────────────────────────────
+      const ctx = loadContext();
+      if (!ctx) {
+        // 직접 진입 — 홈으로 복귀
+        returnToIdle();
+      } else {
+        renderPhoneStep(ctx);
+      }
+    </script>
+  </body>
+</html>
