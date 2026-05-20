@@ -26,9 +26,13 @@
 <body>
   <div id="app"></div>
   <script>
+    let _storeName = '';
+    let _showStoreName = false;
+
     function renderIdle() {
       sdk.template.renderIdlePage({
         type: 'oneButton',
+        ...(_showStoreName && _storeName ? { description: { text: _storeName } } : {}),
         button: {
           text: '포인트 조회',
           onClick: () => { location.href = './agreement.html'; },
@@ -77,17 +81,25 @@
       onCatDisconnect: () => { renderIdle(); },
     });
 
-    // minPoint / isMinPointEnabled 초기 동기화
+    renderIdle();
+
     (async () => {
-      try {
-        const cfg = await AppConfigService.getPointUseConfig();
-        AppSession.setConfig(cfg);
-      } catch (e) { console.warn('[home] minPoint config load fail', e); }
+      const [cfg, showStoreName, merchant] = await Promise.allSettled([
+        AppConfigService.getPointUseConfig(),
+        AppConfigService.getShowStoreName(),
+        sdk.app.getMerchant(),
+      ]);
+
+      if (cfg.status === 'fulfilled') AppSession.setConfig(cfg.value);
+      else console.warn('[home] minPoint config load fail', cfg.reason);
+
+      _showStoreName = showStoreName.status === 'fulfilled' ? showStoreName.value : false;
+      _storeName     = merchant.status === 'fulfilled' ? (merchant.value?.name ?? '') : '';
+
+      if (_showStoreName && _storeName) renderIdle();
     })();
 
     window.addEventListener('beforeunload', () => { AppSession.stop(); });
-
-    renderIdle();
   </script>
 </body>
 </html>

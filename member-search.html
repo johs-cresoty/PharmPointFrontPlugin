@@ -26,11 +26,20 @@
 <body>
   <div id="app"></div>
   <script>
+    async function init() {
+      let storeName = '';
+      try {
+        const merchant = await sdk.app.getMerchant();
+        storeName = merchant.name ?? '';
+      } catch (e) {
+        console.error('매장명 조회 실패:', e);
+      }
+
       sdk.template.renderInputPage({
         type: 'phone',
         top: {
           title: '휴대폰 번호 입력하고 포인트 확인하세요.',
-          subtitle: '약국 이름',
+          subtitle: storeName,
         },
         disclaimer: '포인트 조회 외 다른 용도로 사용하지 않아요.',
         input: {
@@ -63,6 +72,9 @@
           location.href = './agreement.html';
         },
       });
+    }
+
+    init();
   </script>
 </body>
 </html>

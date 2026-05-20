@@ -64,6 +64,14 @@ window.AppConfigService = (function () {
     return { minPoint, isMinPointEnabled: enabled };
   }
 
+  // ── 대기 화면 매장명 표시 ────────────────────────────
+
+  /** @returns {Promise<boolean>} (저장 없음 → true) */
+  async function getShowStoreName() {
+    const raw = await readString(StorageKeys.SHOW_STORE_NAME, null);
+    return raw === null || raw === undefined || raw === '' ? true : raw === 'true';
+  }
+
   // ── 결과 화면 대기 시간 ─────────────────────────────
   // SDK ResultPage 가 timerMs 를 [3, 10] 초로 clamp 함 (cdn.tossplace.com TIMER_MIN/MAX_SECONDS).
 
@@ -102,6 +110,7 @@ window.AppConfigService = (function () {
     isMinPointEnabled,
     setMinPoint,
     getPointUseConfig,
+    getShowStoreName,
     getResultTimeoutSeconds,
     getResultTimeoutMs,
     setResultTimeoutSeconds,
