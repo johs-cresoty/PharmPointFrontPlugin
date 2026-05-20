@@ -111,6 +111,9 @@
       #app:empty { display: none; }
       /* renderSelectGridPage 옵션 title 의 \n 을 실제 줄바꿈으로 렌더 */
       #app button { white-space: pre-line; }
+      /* SDK Navbar 좌측 뒤로가기 숨김 (앱 셸 최상단 <- 와 중복되어 혼란 유발).
+         대신 각 render*Page 호출에 navbarButton 으로 우상단 "닫기"/"뒤로" 명시. */
+      #app nav [aria-label="뒤로가기"] { display: none; }
     </style>
 </head>
 <body>
@@ -125,13 +128,16 @@
       <span class="setting-value" id="serial-number">-</span>
     </div>
 
-    <!-- 시리얼 통신 속도 -->
-    <div class="setting-row">
-      <span class="setting-label">시리얼 통신 속도</span>
-      <select id="baud-rate">
-        <option value="115200">115200</option>
-        <option value="38400">38400</option>
-      </select>
+    <!-- 최소 사용 포인트 -->
+    <div class="setting-row" id="min-point-row" style="cursor: pointer;">
+      <span class="setting-label">최소 사용 포인트</span>
+      <span class="setting-value" id="min-point-value">-</span>
+    </div>
+
+    <!-- 화면 대기 시간 -->
+    <div class="setting-row" id="result-timeout-row" style="cursor: pointer;">
+      <span class="setting-label">화면 대기 시간</span>
+      <span class="setting-value" id="result-timeout-value">-</span>
     </div>
 
     <!-- 대기 화면에 매장명 표시 -->
@@ -143,16 +149,13 @@
       </label>
     </div>
 
-    <!-- 최소 사용 포인트 -->
-    <div class="setting-row" id="min-point-row" style="cursor: pointer;">
-      <span class="setting-label">최소 사용 포인트</span>
-      <span class="setting-value" id="min-point-value">-</span>
-    </div>
-
-    <!-- 화면 대기 시간 -->
-    <div class="setting-row" id="result-timeout-row" style="cursor: pointer;">
-      <span class="setting-label">화면 대기 시간</span>
-      <span class="setting-value" id="result-timeout-value">-</span>
+    <!-- 시리얼 통신 속도 -->
+    <div class="setting-row">
+      <span class="setting-label">시리얼 통신 속도</span>
+      <select id="baud-rate">
+        <option value="115200">115200</option>
+        <option value="38400">38400</option>
+      </select>
     </div>
   </div>
 
@@ -262,6 +265,7 @@
         subtitle: '설정',
         options:  buildMinPointOptions(current),
         onBack:   () => { location.href = './settings.html'; },
+        navbarButton: { label: '닫기', onClick: () => { location.href = './settings.html'; } },
       });
     }
 
@@ -278,6 +282,7 @@
           await applyMinPoint(n);
         },
         onBack: () => openMinPointGrid(),
+        navbarButton: { label: '뒤로', onClick: () => openMinPointGrid() },
       });
     }
 
@@ -311,6 +316,7 @@
         subtitle: '설정',
         options:  buildResultTimeoutOptions(current),
         onBack:   () => { location.href = './settings.html'; },
+        navbarButton: { label: '닫기', onClick: () => { location.href = './settings.html'; } },
       });
     }
 
