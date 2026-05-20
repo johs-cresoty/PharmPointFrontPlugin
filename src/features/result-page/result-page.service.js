@@ -57,9 +57,9 @@ window.ResultPageService = (function () {
   function showEarnSuccess({ earnPoint, storeName, balancePoint, onTimeout, timerMs }) {
     return render({
       type:        'text',
-      text:        `${fmtPoint(balancePoint)}P`,
+      text:        `보유 포인트 ${fmtPoint(balancePoint)}P`,
       title:       `${fmtPoint(earnPoint)}P 적립완료`,
-      description: `${storeName} 약국 포인트가 적립되었습니다.`,
+      description: `${storeName}\n포인트가 적립되었습니다.`,
       onTimeout, timerMs,
     });
   }

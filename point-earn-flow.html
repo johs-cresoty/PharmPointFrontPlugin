@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="https://static.toss.im/tds/43.9.4/css/tds.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://static.toss.im/tps/main.css" />
+    <link rel="stylesheet" type="text/css" href="https://static.toss.im/tps/others.css" />
+    <link rel="stylesheet" type="text/css" href="./global.css" />
+    <script src="https://cdn.tossplace.com/toss-front-sdk/v0/index.js"></script>
+    <script src="./sdk.js"></script>
+    <script src="./bundle.js"></script>
+    <title>포인트 적립</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      // sessionStorage 에 들어있는 EARN_SINGLE_REQ / EARN_MULTI_REQ 컨텍스트.
+      //   { source: 'CAT'|'TERMINAL', paymentType: 'SINGLE'|'MULTIPLE',
+      //     transactionData: { trnDate, trnTime, appNum, trnGubn, payAmount, payments? } }
+      const CTX_KEY = 'pharm_earn_point_ctx';
+
+      function loadContext() {
+        try {
+          const raw = sessionStorage.getItem(CTX_KEY);
+          if (!raw) return null;
+          return JSON.parse(raw);
+        } catch (e) { return null; }
+      }
+
+      function clearContext() {
+        sessionStorage.removeItem(CTX_KEY);
+      }
+
+      async function getStoreName() {
+        try {
+          const merchant = await sdk.app.getMerchant();
+          return merchant?.name ?? '';
+        } catch (e) { return ''; }
+      }
+
+      function returnToIdle() {
+        clearContext();
+        location.href = './home.html';
+      }
+
+      function toast(message, icon) {
+        sdk.template.openToast({ message, icon });
+      }
+
+      // ── 휴대폰 입력 → 적립 확정 ──────────────────────
+      // SINGLE / MULTIPLE 동일 흐름. PointEarnService 가 payments 유무로 자동 분기.
+      function renderPhoneStep({ ctx, estimatePromise }) {
+        sdk.template.renderInputPage({
+          type: 'phone',
+          top: {
+            title: '휴대폰 번호를 입력해주세요.',
+            subtitle: '포인트 적립',
+          },
+          input: { placeholder: '전화번호 입력' },
+          onSubmit: async (phone) => {
+            await submitEarn({ ctx, phone, estimatePromise });
+          },
+          onBack: () => {
+            PointEarnService.cancelEarn({ source: ctx.source });
+            returnToIdle();
+          },
+        });
+      }
+
+      async function submitEarn({ ctx, phone, estimatePromise }) {
+        const td = ctx.transactionData || {};
+
+        // estimate 결과 회수 (실패해도 graceful — sleSeq 없이 결제정보로 commit)
+        let sleSeq = '';
+        let estimatedPoint = 0;
+        try {
+          const est = await estimatePromise;
+          if (est?.success && est.data) {
+            sleSeq         = est.data.sleSeq || '';
+            estimatedPoint = parseInt(est.data.pointAmount, 10) || 0;
+          }
+        } catch (e) {
+          console.warn('[earn-flow] estimate failed, continuing without sleSeq', e);
+        }
+
+        const commitResult = await PointEarnService.commitWithFallback({
+          customerPhone:     phone,
+          transactionDate:   td.trnDate || '',
+          sleSeq,
+          transactionGubn:   td.trnGubn || '',
+          transactionTime:   td.trnTime || '',
+          transactionAmount: td.payAmount || 0,
+          approvalNumber:    td.appNum || '',
+          payments:          td.payments,
+        });
+
+        if (!commitResult.success) {
+          toast(commitResult.error || '적립 실패', 'error');
+          return;
+        }
+
+        const balancePoint = parseInt(commitResult.data?.pointBalance, 10) || 0;
+        // estimate 가 실패했어도 upsert 응답의 PNT_AMT 가 실제 적립 P
+        const earnPoint = estimatedPoint || (parseInt(commitResult.data?.pointAmount, 10) || 0);
+        const storeName = await getStoreName();
+
+        ResultPageService.showEarnSuccess({
+          earnPoint,
+          storeName,
+          balancePoint,
+          onTimeout: returnToIdle,
+        });
+        clearContext();
+      }
+
+      // ── entry ───────────────────────────────────────
+      const ctx = loadContext();
+      if (!ctx) {
+        // 직접 진입 — 홈으로 복귀
+        returnToIdle();
+      } else {
+        // Q2 b: 페이지 로드 직후 estimate 시작 (사용자 입력과 병렬). 실패해도 graceful.
+        const estimatePromise = PointEarnService.estimate(ctx.transactionData || {})
+          .catch(e => { console.warn('[earn-flow] estimate error', e); return { success: false }; });
+        renderPhoneStep({ ctx, estimatePromise });
+      }
+    </script>
+  </body>
+</html>

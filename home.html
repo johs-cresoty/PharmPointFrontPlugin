@@ -72,10 +72,35 @@
       location.href = './point-use-flow.html';
     }
 
+    // CAT_WITH_CUSTOMER (CAT 007) — 캣포스가 이미 고객을 선택해서 보유포인트/결제금액을 함께 보낸 사용 요청.
+    // 휴대폰 입력 스킵, 잔액 검증 후 바로 사용 입력 화면으로.
+    function startUseWithCustomerFlow(args) {
+      sessionStorage.setItem('pharm_use_point_with_customer_ctx', JSON.stringify({
+        source:            args.source,
+        balance:           args.balance           ?? 0,
+        payAmount:         args.payAmount         ?? 0,
+        minPoint:          args.minPoint          ?? 0,
+        isMinPointEnabled: args.isMinPointEnabled ?? false,
+      }));
+      location.href = './point-use-with-customer-flow.html';
+    }
+
+    // EARN_SINGLE_REQ / EARN_MULTI_REQ 공통 진입.
+    // PointEarnService 가 transactionData.payments 유무로 SINGLE/MULTIPLE 자동 분기하므로
+    // UI 측은 동일한 화면(point-earn-flow.html) 으로 라우팅한다.
+    function startEarnPointFlow(args) {
+      sessionStorage.setItem('pharm_earn_point_ctx', JSON.stringify({
+        source:          args.source,
+        paymentType:     args.paymentType,
+        transactionData: args.transactionData ?? {},
+      }));
+      location.href = './point-earn-flow.html';
+    }
+
     AppSession.start({
-      onNavigateToSavePoint:  (args) => { console.log('[AppSession] 적립 요청', JSON.stringify(args)); },
+      onNavigateToSavePoint:  (args) => { startEarnPointFlow(args); },
       onNavigateToLookup:     (args) => { startUsePointFlow(args); },
-      onNavigateToUsePoint:   (args) => { console.log('[AppSession] 사용 요청', JSON.stringify(args)); },
+      onNavigateToUsePoint:   (args) => { startUseWithCustomerFlow(args); },
       onNavigateToCatRequest: (args) => {
         if (args.mode === 'CAT_REQUEST_NUM') renderPhoneInput();
       },

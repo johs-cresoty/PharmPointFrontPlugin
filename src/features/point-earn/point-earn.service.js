@@ -8,7 +8,7 @@
  *      - 복합결제      → ByMultiplePayment
  *      - 단건결제      → BySinglePayment
  *
- * 의존: PointTransactionService
+ * 의존: PointTransactionService, SocketGateway, PointUseSource
  */
 window.PointEarnService = (function () {
 
@@ -89,5 +89,19 @@ window.PointEarnService = (function () {
     return commit({ ...cmd, sleSeq: '' });
   }
 
-  return { estimate, commit, commitWithFallback };
+  /**
+   * 적립 취소 — source 채널에 따라 실패 응답.
+   * Android: PhoneNumberInputViewModel.OnClickClose → sendCATFail / sendTerminalInit
+   * @param {{ source: string }} input
+   */
+  async function cancelEarn({ source }) {
+    if (source === PointUseSource.TERMINAL) {
+      return SocketGateway.sendTerminalInit();
+    }
+    if (source === PointUseSource.CAT || source === PointUseSource.CAT_WITH_CUSTOMER) {
+      return SocketGateway.sendCATFail();
+    }
+  }
+
+  return { estimate, commit, commitWithFallback, cancelEarn };
 })();
