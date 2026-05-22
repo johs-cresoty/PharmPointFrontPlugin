@@ -27,6 +27,9 @@
   <div id="app"></div>
   <script>
     async function init() {
+      // ApiConfig 초기화 (taxNo 설정 완료까지 대기)
+      await ApiConfig.ensureInit();
+
       let storeName = '';
       try {
         const merchant = await sdk.app.getMerchant();

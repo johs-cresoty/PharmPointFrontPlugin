@@ -111,14 +111,20 @@ window.ApiConfig = (function () {
       try {
         const merchant = await sdk.app.getMerchant();
         _taxNo = merchant?.businessNumber ?? '';
-        console.log('[ApiConfig] getMerchant 성공:', { businessNumber: _taxNo, merchant });
+
+        console.log('[ApiConfig] getMerchant 성공!');
+        console.log('  - businessNumber:', _taxNo);
+        console.log('  - merchant name:', merchant?.name ?? '(없음)');
+        console.log('  - 전체 merchant:', JSON.stringify(merchant));
 
         // 값이 없으면 경고
         if (!_taxNo || _taxNo === '0000000000') {
-          console.warn('[ApiConfig] 경고: businessNumber 가 없거나 기본값입니다.', { merchant });
+          console.warn('[ApiConfig] ⚠️ 경고: businessNumber 가 없거나 기본값입니다!');
+        } else {
+          console.log('[ApiConfig] ✓ businessNumber 정상 할당됨:', _taxNo);
         }
       } catch (e) {
-        console.error('[ApiConfig] getMerchant 실패:', e);
+        console.error('[ApiConfig] ❌ getMerchant 실패:', e);
         _taxNo = '';
       }
     })();
