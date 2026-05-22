@@ -180,16 +180,21 @@
       location.href = './point-earn-flow.html';
     }
 
-    AppSession.start({
-      onNavigateToSavePoint:  (args) => { startEarnPointFlow(args); },
-      onNavigateToLookup:     (args) => { startUsePointFlow(args); },
-      onNavigateToUsePoint:   (args) => { startUseWithCustomerFlow(args); },
-      onNavigateToCatRequest: (args) => {
-        if      (args.mode === 'CAT_REQUEST_NUM')      renderPhoneInput();
-        else if (args.mode === 'CAT_REQUEST_CUSTOMER') renderCustomerLookup();
-      },
-      onCatDisconnect: () => { renderIdle(); },
-    });
+    (async () => {
+      // ApiConfig 초기화 (sdk.app.getMerchant로 taxNo 설정 완료까지 대기)
+      await ApiConfig.ensureInit();
+
+      AppSession.start({
+        onNavigateToSavePoint:  (args) => { startEarnPointFlow(args); },
+        onNavigateToLookup:     (args) => { startUsePointFlow(args); },
+        onNavigateToUsePoint:   (args) => { startUseWithCustomerFlow(args); },
+        onNavigateToCatRequest: (args) => {
+          if      (args.mode === 'CAT_REQUEST_NUM')      renderPhoneInput();
+          else if (args.mode === 'CAT_REQUEST_CUSTOMER') renderCustomerLookup();
+        },
+        onCatDisconnect: () => { renderIdle(); },
+      });
+    })();
 
     renderIdle();
 

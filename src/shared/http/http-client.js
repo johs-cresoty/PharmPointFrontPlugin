@@ -46,6 +46,7 @@ window.PharmHttpClient = (function () {
   }
 
   async function get(path, params = {}) {
+    await ApiConfig.ensureInit();
     const url = new URL(`${ApiConfig.baseUrl}${path}`);
     for (const [key, value] of Object.entries(encryptParams(params))) {
       url.searchParams.set(key, value);
@@ -56,6 +57,7 @@ window.PharmHttpClient = (function () {
   }
 
   async function post(path, body = {}) {
+    await ApiConfig.ensureInit();
     const url = `${ApiConfig.baseUrl}${path}`;
     const response = await fetch(url, {
       method:  'POST',
