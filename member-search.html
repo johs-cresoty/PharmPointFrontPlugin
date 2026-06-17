@@ -53,7 +53,7 @@
         },
         onSubmit: async (phone) => {
           try {
-            const result = await PointInquiryService.getCustomer(phone);
+            const result = await PointInquiryService.getPointBalance(phone);
             sessionStorage.setItem(
               'pharm_lookup_result',
               JSON.stringify({ phone, ...result })
