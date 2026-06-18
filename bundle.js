@@ -2254,7 +2254,6 @@ window.AppConfigService = (function () {
       white-space: nowrap;
     }
     .app-toast.show { opacity: 1; transform: translate(-50%, -4px); }
-    .app-toast::before { content: '⚠️'; font-size: 16px; }
   `;
   document.head.appendChild(style);
 

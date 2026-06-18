@@ -64,15 +64,23 @@
 
     async function submitInquiry(phone) {
       try {
+        // 1단계: 등록 여부 확인 (GET /api/terminals/customers)
+        const exist = await PointInquiryService.getCustomer(phone);
+        if (!exist.success || !exist.customer) {
+          sdk.template.openToast({ message: '등록된 회원이 없습니다.', icon: 'error' });
+          return;
+        }
+        // 2단계: 상세 조회 (GET /api/terminals/customers/code)
         const result = await PointInquiryService.getPointBalance(phone);
         sessionStorage.setItem('pharm_lookup_result', JSON.stringify({ phone, ...result }));
+        location.href = './result.html';
       } catch (err) {
         console.error('포인트 조회 실패:', err);
         sessionStorage.setItem('pharm_lookup_result', JSON.stringify({
           phone, success: false, error: `조회 중 오류가 발생했습니다. (${err.message})`,
         }));
+        location.href = './result.html';
       }
-      location.href = './result.html';
     }
 
     async function init() {

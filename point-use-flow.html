@@ -122,6 +122,13 @@
         showPhoneOverlay();
 
         const onSubmitPhone = async (phone) => {
+          // 1단계: 등록 여부 확인 (GET /api/terminals/customers)
+          const exist = await PointInquiryService.getCustomer(phone);
+          if (!exist.success || !exist.customer) {
+            toast('등록된 회원이 없습니다.', 'error');
+            return;
+          }
+          // 2단계: 상세 조회 (GET /api/terminals/customers/code)
           const res = await PointInquiryService.getPointBalance(phone);
           if (!res.success || !res.customer) {
             toast(res.error || '등록된 회원이 없습니다.', 'error');
@@ -147,14 +154,13 @@
             syncPhoneBtnState();
           },
           onBack: () => {
-            hidePhoneOverlay();
+            // hidePhoneOverlay() 호출 안 함 — 페이지 전환 중 오버레이 유지해서 키패드 노출 방지
             PointUseService.cancelUse({ source: ctx.source });
             returnToIdle();
           },
         });
 
         document.getElementById('backBtn').onclick = () => {
-          hidePhoneOverlay();
           PointUseService.cancelUse({ source: ctx.source });
           returnToIdle();
         };
