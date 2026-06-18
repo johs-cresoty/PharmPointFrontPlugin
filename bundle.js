@@ -1895,10 +1895,10 @@ window.ResultPageService = (function () {
    */
   function showEarnSuccess({ earnPoint, storeName, balancePoint, onTimeout, timerMs }) {
     return render({
-      type:        'text',
-      text:        `보유 포인트 ${fmtPoint(balancePoint)}P`,
-      title:       `${fmtPoint(earnPoint)}P 적립완료`,
-      description: `${storeName}\n포인트가 적립되었습니다.`,
+      type:        'image',
+      status:      'success',
+      title:       `${fmtPoint(earnPoint)}P 적립 완료`,
+      description: `${fmtPoint(balancePoint)}P 있어요`,
       onTimeout, timerMs,
     });
   }
@@ -1909,10 +1909,10 @@ window.ResultPageService = (function () {
    */
   function showUseSuccess({ usePoint, storeName, remainingPoint, onTimeout, timerMs }) {
     return render({
-      type:        'text',
-      text:        `${fmtPoint(remainingPoint)}P`,
+      type:        'image',
+      status:      'success',
       title:       `${fmtPoint(usePoint)}P 사용완료`,
-      description: `${storeName} 약국 포인트가 사용되었습니다.`,
+      description: `${fmtPoint(remainingPoint)}P 남았어요`,
       onTimeout, timerMs,
     });
   }
@@ -2223,4 +2223,66 @@ window.AppConfigService = (function () {
     getResultTimeoutMs,
     setResultTimeoutSeconds,
   };
+})();
+
+// ── 커스텀 앱 토스트 (하단 CTA 버튼 위 위치) ──
+(function () {
+  if (window.AppToast) return;
+
+  const style = document.createElement('style');
+  style.textContent = `
+    .app-toast {
+      position: fixed;
+      bottom: 96px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #4e5968;
+      color: #fff;
+      border-radius: 24px;
+      padding: 12px 22px;
+      font-size: 15px;
+      line-height: 1.4;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      max-width: 90%;
+      white-space: nowrap;
+    }
+    .app-toast.show { opacity: 1; transform: translate(-50%, -4px); }
+    .app-toast::before { content: '⚠️'; font-size: 16px; }
+  `;
+  document.head.appendChild(style);
+
+  let timer = null;
+  let el = null;
+  function show(message) {
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'app-toast';
+      document.body.appendChild(el);
+    }
+    el.textContent = message;
+    el.classList.add('show');
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => el && el.classList.remove('show'), 3000);
+  }
+
+  window.AppToast = { show };
+
+  // sdk.template.openToast 호출도 커스텀 토스트로 redirect
+  if (window.sdk && sdk.template && typeof sdk.template.openToast === 'function') {
+    sdk.template.openToast = function ({ message }) { show(message); };
+  } else {
+    // sdk 가 아직 미준비면 다음 틱에 override
+    setTimeout(() => {
+      if (window.sdk && sdk.template) {
+        sdk.template.openToast = function ({ message }) { show(message); };
+      }
+    }, 0);
+  }
 })();

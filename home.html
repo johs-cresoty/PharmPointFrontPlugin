@@ -22,9 +22,41 @@
     <script src="./sdk.js"></script>
     <script src="./bundle.js"></script>
     <title>Order Example - Toss Front SDK</title>
+    <style>
+      #app.phone-overlay-on nav { display: none !important; }
+      #app.phone-overlay-on img[src*="logo-toss"] { display: none !important; }
+      body > #app.phone-overlay-on { padding-top: 160px !important; padding-bottom: 160px !important; box-sizing: border-box !important; }
+
+      .overlay-top, .overlay-bottom {
+        position: fixed; left: 0; right: 0; background: #fff; z-index: 10; padding: 0 24px;
+      }
+      .overlay-top { top: 0; padding-top: 12px; padding-bottom: 12px; }
+      .overlay-bottom { bottom: 0; padding-top: 12px; padding-bottom: 20px; }
+      .overlay-hidden { display: none !important; }
+      .header-back { background: none; border: 0; font-size: 24px; color: #4e5968; padding: 4px; cursor: pointer; margin-bottom: 2px; }
+      .header-store { font-size: 22px; color: #8b95a1; text-align: center; margin: 0 0 8px; font-weight: 500; }
+      .header-hint { font-size: 16px; color: #8b95a1; text-align: center; margin: 0; }
+      .footer-agreement { display: flex; align-items: center; gap: 10px; font-size: 16px; color: #191f28; margin-bottom: 12px; justify-content: center; }
+      .footer-agreement input[type='checkbox'] { width: 22px; height: 22px; accent-color: #3182f6; }
+      .footer-confirm { width: 100%; height: 56px; background: #3182f6; color: #fff; border: 0; border-radius: 12px; font-size: 18px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+      .footer-confirm:disabled { background: #6b7684; cursor: not-allowed; pointer-events: none; }
+    </style>
   </head>
 <body>
   <div id="app"></div>
+
+  <header class="overlay-top overlay-hidden" id="phoneOverlayTop">
+    <button class="header-back" id="phoneBackBtn" aria-label="뒤로 가기">←</button>
+    <p class="header-hint">휴대폰 번호 입력하고 포인트 받아가세요.</p>
+  </header>
+
+  <footer class="overlay-bottom overlay-hidden" id="phoneOverlayBottom">
+    <label class="footer-agreement">
+      <input type="checkbox" id="phoneAgreementCheck" checked />
+      <span>[필수] 개인정보 제공 동의합니다.</span>
+    </label>
+    <button class="footer-confirm" id="phoneConfirmBtn" type="button">확인</button>
+  </footer>
   <script>
     let _storeName = '';
     let _showStoreName = false;
@@ -73,12 +105,35 @@
       if (el) el.style.display = 'none';
     }
 
+    function showPhoneOverlay() {
+      document.getElementById('phoneOverlayTop').classList.remove('overlay-hidden');
+      document.getElementById('phoneOverlayBottom').classList.remove('overlay-hidden');
+      document.getElementById('app').classList.add('phone-overlay-on');
+    }
+    function hidePhoneOverlay() {
+      document.getElementById('phoneOverlayTop').classList.add('overlay-hidden');
+      document.getElementById('phoneOverlayBottom').classList.add('overlay-hidden');
+      document.getElementById('app').classList.remove('phone-overlay-on');
+    }
+
+    let _currentPhone = '';
+
+    function triggerPhoneSubmit(handler) {
+      const phone = _currentPhone || '';
+      if (phone.length !== 11) { sdk.template.openToast({ message: '휴대폰 번호 11자리를 모두 입력해주세요.', icon: 'error' }); return; }
+      if (!document.getElementById('phoneAgreementCheck').checked) {
+        sdk.template.openToast({ message: '개인정보 제공 동의가 필요합니다.', icon: 'error' }); return;
+      }
+      handler(phone);
+    }
+
     function renderIdle() {
+      hidePhoneOverlay();
       sdk.template.renderIdlePage({
         type: 'oneButton',
         button: {
           text: '포인트 조회',
-          onClick: () => { location.href = './agreement.html'; },
+          onClick: () => { location.href = './member-search.html'; },
         },
       });
       if (_showStoreName && _storeName) showStoreNameOverlay(_storeName);
@@ -88,30 +143,48 @@
 
     function renderPhoneInput() {
       hideStoreNameOverlay();
+      _currentPhone = '';
+      showPhoneOverlay();
+
+      const onSubmitPhone = async (phone) => {
+        await SocketGateway.sendCATPhoneNumber(phone);
+        renderIdle();
+      };
+
       sdk.template.renderInputPage({
         type: 'phone',
-        top: {
-          title: '휴대폰 번호를 입력해주세요.',
-          subtitle: '포인트 적립/사용',
-        },
+        top: { title: '', subtitle: '' },
         input: {
           placeholder: '전화번호 입력',
+          onChange: (value) => { _currentPhone = value; },
         },
-        onSubmit: async (phone) => {
-          await SocketGateway.sendCATPhoneNumber(phone);
-          renderIdle();
-        },
+        onSubmit: (phone) => { _currentPhone = phone; triggerPhoneSubmit(onSubmitPhone); },
         onBack: () => {
+          hidePhoneOverlay();
           SocketGateway.sendCATFail();
           renderIdle();
         },
       });
+
+      document.getElementById('phoneBackBtn').onclick = () => {
+        hidePhoneOverlay();
+        SocketGateway.sendCATFail();
+        renderIdle();
+      };
+      document.getElementById('phoneConfirmBtn').onclick = () => triggerPhoneSubmit(onSubmitPhone);
+
+      const agreement = document.getElementById('phoneAgreementCheck');
+      const confirmBtn = document.getElementById('phoneConfirmBtn');
+      const syncBtnState = () => { confirmBtn.disabled = !agreement.checked; };
+      agreement.onchange = syncBtnState;
+      syncBtnState();
     }
 
     // CUSTOMER_REGISTER_REQ (Legacy CAT|002) — 캣포스가 회원 정보 조회를 요청.
     // Android: PhoneNumberInputViewModel.sendCATCustomerInfo → GetCustomerUseCase → sendCATCustomerInfo
     function renderCustomerLookup() {
       hideStoreNameOverlay();
+      hidePhoneOverlay();
       sdk.template.renderInputPage({
         type: 'phone',
         top: {

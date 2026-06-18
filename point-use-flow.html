@@ -11,12 +11,47 @@
     <script src="./sdk.js"></script>
     <script src="./bundle.js"></script>
     <title>포인트 사용</title>
+    <style>
+      #app.phone-overlay-on nav { display: none !important; }
+      #app.phone-overlay-on img[src*="logo-toss"] { display: none !important; }
+      body > #app.phone-overlay-on { padding-top: 160px !important; padding-bottom: 160px !important; box-sizing: border-box !important; }
+      /* 사용하기 버튼 비활성 (입력 < minPoint) — React 가 관리하는 버튼 스타일 override */
+      #app.use-btn-disabled form button { opacity: 0.5 !important; pointer-events: none !important; cursor: not-allowed !important; }
+
+      .overlay-top, .overlay-bottom {
+        position: fixed; left: 0; right: 0; background: #fff; z-index: 10; padding: 0 24px;
+      }
+      .overlay-top { top: 0; padding-top: 12px; padding-bottom: 12px; }
+      .overlay-bottom { bottom: 0; padding-top: 12px; padding-bottom: 20px; }
+      .overlay-hidden { display: none !important; }
+      .header-back { background: none; border: 0; font-size: 24px; color: #4e5968; padding: 4px; cursor: pointer; margin-bottom: 2px; }
+      .header-store { font-size: 22px; color: #8b95a1; text-align: center; margin: 0 0 4px; font-weight: 500; }
+      .header-amount { font-size: 32px; font-weight: 700; color: #191f28; text-align: center; margin: 0 0 10px; }
+      .header-hint { font-size: 16px; color: #8b95a1; text-align: center; margin: 0; }
+      .footer-agreement { display: flex; align-items: center; gap: 10px; font-size: 16px; color: #191f28; margin-bottom: 12px; justify-content: center; }
+      .footer-agreement input[type='checkbox'] { width: 22px; height: 22px; accent-color: #3182f6; }
+      .footer-confirm { width: 100%; height: 56px; background: #3182f6; color: #fff; border: 0; border-radius: 12px; font-size: 18px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+      .footer-confirm:disabled { background: #6b7684; cursor: not-allowed; pointer-events: none; }
+    </style>
   </head>
   <body>
     <div id="app"></div>
+
+    <header class="overlay-top overlay-hidden" id="phoneOverlayTop">
+      <button class="header-back" id="backBtn" aria-label="뒤로 가기">←</button>
+      <h1 class="header-amount" id="payAmount">&nbsp;</h1>
+      <p class="header-hint">휴대폰 번호 입력 후 확인 버튼을 눌러주세요.</p>
+    </header>
+
+    <footer class="overlay-bottom overlay-hidden" id="phoneOverlayBottom">
+      <label class="footer-agreement">
+        <input type="checkbox" id="agreementCheck" checked />
+        <span>[필수] 개인정보 제공 동의합니다.</span>
+      </label>
+      <button class="footer-confirm" id="confirmBtn" type="button">확인</button>
+    </footer>
+
     <script>
-      // sessionStorage 에 들어있는 USE_POINT_REQ 컨텍스트
-      //   { source: 'CAT'|'TERMINAL', payAmount: number, trnDate?: string }
       const CTX_KEY = 'pharm_use_point_ctx';
 
       function loadContext() {
@@ -47,28 +82,98 @@
         sdk.template.openToast({ message, icon });
       }
 
+      function showPhoneOverlay() {
+        document.getElementById('phoneOverlayTop').classList.remove('overlay-hidden');
+        document.getElementById('phoneOverlayBottom').classList.remove('overlay-hidden');
+        document.getElementById('app').classList.add('phone-overlay-on');
+      }
+      function hidePhoneOverlay() {
+        document.getElementById('phoneOverlayTop').classList.add('overlay-hidden');
+        document.getElementById('phoneOverlayBottom').classList.add('overlay-hidden');
+        document.getElementById('app').classList.remove('phone-overlay-on');
+      }
+
+      let currentPhone = '';
+
+      function triggerSubmit(handler) {
+        const phone = currentPhone || '';
+        if (phone.length !== 11) { toast('휴대폰 번호 11자리를 모두 입력해주세요.', 'error'); return; }
+        const agreement = document.getElementById('agreementCheck');
+        if (!agreement.checked) { toast('개인정보 제공 동의가 필요합니다.', 'error'); return; }
+        handler(phone);
+      }
+
+      // ── DOM input value 강제 변경 (React-controlled input 외부 제어) ──
+      function setTossInputValue(value) {
+        const inp = document.querySelector('#app form input');
+        if (!inp) return;
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+        setter.call(inp, String(value));
+        inp.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+
       // ── 1. 전화번호 입력 ─────────────────────────────
-      function renderPhoneStep(ctx) {
+      async function renderPhoneStep(ctx, prefilledPhone) {
+        currentPhone = prefilledPhone || '';
+
+        const payAmount = parseInt(ctx.payAmount, 10) || 0;
+        document.getElementById('payAmount').textContent = `${payAmount.toLocaleString()}원 결제`;
+
+        showPhoneOverlay();
+
+        const onSubmitPhone = async (phone) => {
+          const res = await PointInquiryService.getPointBalance(phone);
+          if (!res.success || !res.customer) {
+            toast(res.error || '등록된 회원이 없습니다.', 'error');
+            return;
+          }
+          hidePhoneOverlay();
+          await handleLookupResult({ ctx, phone, customer: res.customer });
+        };
+
         sdk.template.renderInputPage({
           type: 'phone',
-          top: {
-            title: '휴대폰 번호를 입력해주세요.',
-            subtitle: '포인트 사용',
+          top: { title: '', subtitle: '' },
+          input: {
+            placeholder: '전화번호 입력',
+            onChange: (value) => {
+              currentPhone = (value || '').replace(/\D/g, '');
+              syncPhoneBtnState();
+            },
           },
-          input: { placeholder: '전화번호 입력' },
-          onSubmit: async (phone) => {
-            const res = await PointInquiryService.getPointBalance(phone);
-            if (!res.success || !res.customer) {
-              toast(res.error || '등록된 회원이 없습니다.', 'error');
-              return;
-            }
-            await handleLookupResult({ ctx, phone, customer: res.customer });
+          onSubmit: (phone) => {
+            // 자동 호출 안 함 - 확인 버튼만 트리거. 입력값만 저장.
+            currentPhone = phone;
+            syncPhoneBtnState();
           },
           onBack: () => {
+            hidePhoneOverlay();
             PointUseService.cancelUse({ source: ctx.source });
             returnToIdle();
           },
         });
+
+        document.getElementById('backBtn').onclick = () => {
+          hidePhoneOverlay();
+          PointUseService.cancelUse({ source: ctx.source });
+          returnToIdle();
+        };
+        document.getElementById('confirmBtn').onclick = () => triggerSubmit(onSubmitPhone);
+
+        document.getElementById('agreementCheck').onchange = syncPhoneBtnState;
+        syncPhoneBtnState();
+
+        // 이전에 입력했던 번호 복원 (사용 포인트 입력에서 ← back 누른 경우)
+        if (prefilledPhone) {
+          setTimeout(() => setTossInputValue(prefilledPhone), 50);
+        }
+      }
+
+      function syncPhoneBtnState() {
+        const agreement = document.getElementById('agreementCheck');
+        const confirmBtn = document.getElementById('confirmBtn');
+        if (!agreement || !confirmBtn) return;
+        confirmBtn.disabled = !(agreement.checked && currentPhone.length === 11);
       }
 
       // ── 2. 잔액 검증 → 부족하면 결과화면, 충분하면 입력화면 ─
@@ -76,7 +181,6 @@
         const cfg = await AppConfigService.getPointUseConfig();
         const balance = customer.pointBalance || 0;
 
-        // Android: PhoneNumberInputViewModel.navigateToUsePoint
         const insufficient =
           (cfg.isMinPointEnabled && cfg.minPoint > balance) || balance < 1;
 
@@ -97,26 +201,50 @@
       }
 
       // ── 3. 사용 포인트 입력 (renderInputPage 'number') ──
+      let currentUseValue = 0;
+      let useMinPoint = 1;
+
+      function syncTossUseBtnState() {
+        const app = document.getElementById('app');
+        if (!app) return;
+        const isValid = currentUseValue >= useMinPoint;
+        app.classList.toggle('use-btn-disabled', !isValid);
+      }
+
       function renderUseInputStep({ ctx, phone, customer, balance, cfg, storeName }) {
-        const maxPoint = Math.min(balance, ctx.payAmount || balance); // min(balance, payAmount)
+        const maxPoint = Math.min(balance, ctx.payAmount || balance);
 
         const disclaimer = cfg.isMinPointEnabled && cfg.minPoint > 0
           ? `포인트는 최소 ${cfg.minPoint.toLocaleString('ko-KR')}P부터 사용 가능합니다`
           : `사용 가능 포인트 ${maxPoint.toLocaleString('ko-KR')}P`;
 
+        currentUseValue = 0;
+        useMinPoint = cfg.isMinPointEnabled && cfg.minPoint > 0 ? cfg.minPoint : 1;
+
         sdk.template.renderInputPage({
           type: 'number',
           top: {
-            title:    '포인트 사용',
-            subtitle: '사용하실 포인트를 입력해주세요',
+            title:    '사용할 포인트를 입력해주세요',
+            subtitle: `${balance.toLocaleString('ko-KR')}P 보유`,
           },
-          input:  { placeholder: '포인트 입력' },
+          input: {
+            placeholder: '포인트 입력',
+            onChange: (value) => {
+              let v = parseInt(String(value).replace(/[^0-9]/g, ''), 10) || 0;
+              // 보유 초과 시 보유 전액으로 자동 변경 (실시간)
+              if (v > maxPoint) {
+                setTossInputValue(maxPoint);
+                v = maxPoint;
+              }
+              currentUseValue = v;
+              syncTossUseBtnState();
+            },
+          },
           button: { label: '사용하기' },
           disclaimer,
           onSubmit: async (value) => {
             const raw = parseInt(String(value).replace(/[^0-9]/g, ''), 10) || 0;
 
-            // 최소 사용 포인트 미달 → 토스트
             if (cfg.isMinPointEnabled && cfg.minPoint > 0 && raw < cfg.minPoint) {
               toast(`${cfg.minPoint.toLocaleString('ko-KR')}P 이상 입력해주세요`, 'error');
               return;
@@ -125,12 +253,7 @@
               toast('사용 포인트를 입력해주세요.', 'error');
               return;
             }
-
-            // PharmPoint UseReducer: input > maxPoint → maxPoint 으로 자동 보정
             const usePoint = Math.min(raw, maxPoint);
-            if (usePoint < raw) {
-              toast(`최대 ${maxPoint.toLocaleString('ko-KR')}P까지 사용 가능합니다`, 'error');
-            }
 
             await PointUseService.relayUseResult({
               source:       ctx.source,
@@ -149,16 +272,18 @@
             clearContext();
           },
           onBack: () => {
-            PointUseService.cancelUse({ source: ctx.source });
-            returnToIdle();
+            // 휴대폰 입력 단계로 복귀 (입력했던 번호 그대로)
+            renderPhoneStep(ctx, phone);
           },
         });
+
+        // Toss 가 버튼 렌더한 직후 비활성 상태 초기화
+        setTimeout(syncTossUseBtnState, 0);
       }
 
       // ── entry ───────────────────────────────────────
       const ctx = loadContext();
       if (!ctx) {
-        // 직접 진입 — 홈으로 복귀
         returnToIdle();
       } else {
         renderPhoneStep(ctx);

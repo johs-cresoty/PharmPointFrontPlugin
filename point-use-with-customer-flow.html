@@ -11,6 +11,10 @@
     <script src="./sdk.js"></script>
     <script src="./bundle.js"></script>
     <title>포인트 사용</title>
+    <style>
+      /* 사용하기 버튼 비활성 (입력 < minPoint) */
+      #app.use-btn-disabled form button { opacity: 0.5 !important; pointer-events: none !important; cursor: not-allowed !important; }
+    </style>
   </head>
   <body>
     <div id="app"></div>
@@ -77,6 +81,25 @@
       }
 
       // ── 사용 포인트 입력 (renderInputPage 'number') ──
+      let currentUseValue = 0;
+      let useMinPoint = 1;
+
+      function syncTossUseBtnState() {
+        const app = document.getElementById('app');
+        if (!app) return;
+        const isValid = currentUseValue >= useMinPoint;
+        app.classList.toggle('use-btn-disabled', !isValid);
+      }
+
+      // DOM input value 강제 변경 (React-controlled input 외부 제어)
+      function setTossInputValue(value) {
+        const inp = document.querySelector('#app form input');
+        if (!inp) return;
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+        setter.call(inp, String(value));
+        inp.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+
       function renderUseInputStep({ ctx, balance, payAmount, minPoint, isMinPointEnabled, storeName }) {
         const maxPoint = Math.min(balance, payAmount || balance);
 
@@ -84,13 +107,28 @@
           ? `포인트는 최소 ${minPoint.toLocaleString('ko-KR')}P부터 사용 가능합니다`
           : `사용 가능 포인트 ${maxPoint.toLocaleString('ko-KR')}P`;
 
+        currentUseValue = 0;
+        useMinPoint = isMinPointEnabled && minPoint > 0 ? minPoint : 1;
+
         sdk.template.renderInputPage({
           type: 'number',
           top: {
-            title:    '포인트 사용',
-            subtitle: '사용하실 포인트를 입력해주세요',
+            title:    '사용할 포인트를 입력해주세요',
+            subtitle: `${balance.toLocaleString('ko-KR')}P 보유`,
           },
-          input:  { placeholder: '포인트 입력' },
+          input: {
+            placeholder: '포인트 입력',
+            onChange: (value) => {
+              let v = parseInt(String(value).replace(/[^0-9]/g, ''), 10) || 0;
+              // 보유 초과 시 보유 전액으로 자동 변경 (실시간)
+              if (v > maxPoint) {
+                setTossInputValue(maxPoint);
+                v = maxPoint;
+              }
+              currentUseValue = v;
+              syncTossUseBtnState();
+            },
+          },
           button: { label: '사용하기' },
           disclaimer,
           onSubmit: async (value) => {
@@ -104,15 +142,11 @@
               toast('사용 포인트를 입력해주세요.', 'error');
               return;
             }
-
-            // PharmPoint UseReducer: input > maxPoint → maxPoint 으로 자동 보정
+            // 보유 초과 시 보유로 자동 보정 (silent)
             const usePoint = Math.min(raw, maxPoint);
-            if (usePoint < raw) {
-              toast(`최대 ${maxPoint.toLocaleString('ko-KR')}P까지 사용 가능합니다`, 'error');
-            }
 
             await PointUseService.relayUseResult({
-              source: ctx.source,     // CAT_WITH_CUSTOMER → "OK|{usePoint}\r\n"
+              source: ctx.source,
               balance,
               usePoint,
             });
@@ -130,6 +164,9 @@
             returnToIdle();
           },
         });
+
+        // Toss 가 버튼 렌더한 직후 비활성 상태 초기화
+        setTimeout(syncTossUseBtnState, 0);
       }
 
       // ── entry ───────────────────────────────────────

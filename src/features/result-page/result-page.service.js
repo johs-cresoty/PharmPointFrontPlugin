@@ -56,10 +56,10 @@ window.ResultPageService = (function () {
    */
   function showEarnSuccess({ earnPoint, storeName, balancePoint, onTimeout, timerMs }) {
     return render({
-      type:        'text',
-      text:        `보유 포인트 ${fmtPoint(balancePoint)}P`,
-      title:       `${fmtPoint(earnPoint)}P 적립완료`,
-      description: `${storeName}\n포인트가 적립되었습니다.`,
+      type:        'image',
+      status:      'success',
+      title:       `${fmtPoint(earnPoint)}P 적립 완료`,
+      description: `${fmtPoint(balancePoint)}P 있어요`,
       onTimeout, timerMs,
     });
   }
@@ -70,10 +70,10 @@ window.ResultPageService = (function () {
    */
   function showUseSuccess({ usePoint, storeName, remainingPoint, onTimeout, timerMs }) {
     return render({
-      type:        'text',
-      text:        `${fmtPoint(remainingPoint)}P`,
+      type:        'image',
+      status:      'success',
       title:       `${fmtPoint(usePoint)}P 사용완료`,
-      description: `${storeName} 약국 포인트가 사용되었습니다.`,
+      description: `${fmtPoint(remainingPoint)}P 남았어요`,
       onTimeout, timerMs,
     });
   }
