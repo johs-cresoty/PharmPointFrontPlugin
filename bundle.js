@@ -2254,6 +2254,23 @@ window.AppConfigService = (function () {
       white-space: nowrap;
     }
     .app-toast.show { opacity: 1; transform: translate(-50%, -4px); }
+
+    /* 모든 인터랙티브 요소의 focus outline + 탭 하이라이트 제거 (전역) */
+    *, *::before, *::after { -webkit-tap-highlight-color: transparent !important; }
+    button, a, input, label, [role="button"], [tabindex] { outline: none !important; }
+    button:focus, button:focus-visible,
+    a:focus, a:focus-visible,
+    input:focus, input:focus-visible,
+    label:focus, label:focus-visible,
+    [role="button"]:focus, [tabindex]:focus { outline: none !important; box-shadow: none !important; }
+    .footer-confirm {
+      transition: transform 0.1s ease-out, background 0.15s;
+    }
+    .footer-confirm:active:not(:disabled) {
+      transform: scale(0.97);
+    }
+    .header-back { transition: opacity 0.1s; }
+    .header-back:active { opacity: 0.5; }
   `;
   document.head.appendChild(style);
 

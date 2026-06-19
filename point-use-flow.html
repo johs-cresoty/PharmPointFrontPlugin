@@ -288,12 +288,15 @@
       }
 
       // ── entry ───────────────────────────────────────
-      const ctx = loadContext();
-      if (!ctx) {
-        returnToIdle();
-      } else {
-        renderPhoneStep(ctx);
-      }
+      (async () => {
+        await ApiConfig.ensureInit();
+        const ctx = loadContext();
+        if (!ctx) {
+          returnToIdle();
+        } else {
+          renderPhoneStep(ctx);
+        }
+      })();
     </script>
   </body>
 </html>

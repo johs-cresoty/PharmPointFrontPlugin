@@ -170,13 +170,16 @@
       }
 
       // ── entry ───────────────────────────────────────
-      const ctx = loadContext();
-      if (!ctx) {
-        // 직접 진입 — 홈으로 복귀
-        returnToIdle();
-      } else {
-        handleEntry(ctx);
-      }
+      (async () => {
+        await ApiConfig.ensureInit();
+        const ctx = loadContext();
+        if (!ctx) {
+          // 직접 진입 — 홈으로 복귀
+          returnToIdle();
+        } else {
+          handleEntry(ctx);
+        }
+      })();
     </script>
   </body>
 </html>

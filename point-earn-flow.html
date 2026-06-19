@@ -182,6 +182,7 @@
 
       // ── entry ───────────────────────────────────────
       async function init() {
+        await ApiConfig.ensureInit();
         const ctx = loadContext();
         if (!ctx) {
           returnToIdle();
