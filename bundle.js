@@ -1,237 +1,356 @@
-﻿/* ===== src\shared\utils\crypt.js ===== */
-/**
- * CresotyCrypt JS 포팅 (XOR + 날짜키 방식)
- *
- * 원본: app/src/main/java/com/cresoty/catpospoint/remote/crypt/CresotyCrypt.kt
- *
- * 키 생성 규칙: "crecat" + 오늘 일자(dd, 2자리)
- *   예) 5월 15일 → "crecat15"
- *   주의: 키가 날마다 바뀌므로 오늘 암호화한 값을 내일 복호화하면 깨짐.
- *
- * 출력 포맷:
- *   "{XORed-decimal-concat}^{length-per-decimal}"
- *   예) 원본 "abc" → "2166^121" (각 바이트 XOR 결과를 10진수 문자열로 이어붙임)
- */
-window.CresotyCrypt = (function () {
-  function getDefaultKey() {
-    const day = String(new Date().getDate()).padStart(2, '0');
-    return 'crecat' + day;
-  }
-
-  // 문자열 → UTF-8 바이트 배열
-  function toUtf8Bytes(str) {
-    return new TextEncoder().encode(str);
-  }
-
-  // UTF-8 바이트 배열 → 문자열
-  function fromUtf8Bytes(bytes) {
-    return new TextDecoder('utf-8').decode(bytes);
-  }
-
-  /**
-   * 평문 문자열 암호화
-   * @param {string|number|null|undefined} plain
-   * @returns {string} "cypher^lengths" 형식. 입력이 null/빈문자열이면 ""
-   */
-  function getEncode(plain) {
-    if (plain == null) return '';
-    const plainText = String(plain);
-    if (plainText.length === 0) return '';
-
-    const key = getDefaultKey();
-    const textBytes = toUtf8Bytes(plainText);
-    const keyBytes = toUtf8Bytes(key);
-
-    let cypherText = '';
-    let cypherTextLength = '';
-    let j = 0;
-
-    for (let i = 0; i < textBytes.length; i++) {
-      const tmpStr = String(textBytes[i] ^ keyBytes[j]);
-      cypherText += tmpStr;
-      cypherTextLength += tmpStr.length;
-
-      j++;
-      if (j === keyBytes.length) j = 0;
-    }
-
-    return cypherText + '^' + cypherTextLength;
-  }
-
-  /**
-   * 암호문 복호화 (Kotlin 원본의 hex 우회 로직을 동등한 직접 변환으로 단순화)
-   * @param {string} cypherText
-   * @returns {string} 평문
-   */
-  function getDecode(cypherText) {
-    if (!cypherText) return '';
-
-    const key = getDefaultKey();
-    const delimiterPos = cypherText.indexOf('^');
-    if (delimiterPos <= 0) return '';
-
-    const splitText = cypherText.substring(0, delimiterPos);
-    const splitKey = cypherText.substring(delimiterPos + 1);
-    const numChunks = splitKey.length;
-
-    const keyBytes = toUtf8Bytes(key);
-    const bytes = new Uint8Array(numChunks);
-
-    let pos = 0;
-    for (let i = 0; i < numChunks; i++) {
-      const size = parseInt(splitKey.charAt(i), 10);
-      const decimal = parseInt(splitText.substring(pos, pos + size), 10);
-      bytes[i] = decimal ^ keyBytes[i % keyBytes.length];
-      pos += size;
-    }
-
-    return fromUtf8Bytes(bytes);
-  }
-
-  return {
-    getDefaultKey,
-    getEncode,
-    getDecode,
-  };
-})();
-
-
 /* ===== src\shared\constants\api-config.js ===== */
+/**
+ * ApiConfig — Toss SDK 로부터 매장/단말기 식별 정보를 읽어 팜포인트 API 호출에 필요한 값을 제공.
+ *
+ * 읽는 값 3종:
+ *   - sdk.app.getSerialNumber()        → serialNumber           (프론트 단말기 식별)
+ *   - sdk.app.getMerchant().id         → merchantId             (Toss 매장 식별)
+ *   - sdk.app.getMerchant().businessNumber → businessNumber(=TAXNO) (약국 사업자번호)
+ *
+ * baseUrl: http://dev-app-api.catpos.co.kr (신규 인증 서버)
+ */
 window.ApiConfig = (function () {
-  const BASE_URL_DEV  = 'http://dev.catpos.co.kr';
-  const BASE_URL_PROD = 'http://catpos.co.kr:13922';
-  const isDev = ['localhost', '127.0.0.1'].includes(location.hostname);
+  const BASE_URL = 'https://dev-app-api.catpos.co.kr';
 
-  let _taxNo       = '';
+  let _serialNumber  = '';
+  let _merchantId    = '';
+  let _businessNumber = '';
   let _initPromise = null;
+
+  /**
+   * Toss SDK 가 문자열 또는 { serialNumber } 형태의 객체를 반환할 가능성이 있어
+   * 방어적으로 실제 문자열만 추출.
+   */
+  function extractSerial(v) {
+    if (v == null) return '';
+    if (typeof v === 'string') return v;
+    if (typeof v === 'object') {
+      // 가능성 있는 필드명들 순서대로 시도
+      return String(v.serialNumber ?? v.serial ?? v.id ?? v.value ?? '');
+    }
+    return String(v);
+  }
+
+  const CACHE_KEY = 'pharmpoint_sdk_cache';
+
+  function readCache() {
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  }
+
+  function writeCache(data) {
+    try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch {}
+  }
 
   function ensureInit() {
     if (_initPromise) return _initPromise;
     _initPromise = (async () => {
+      // 페이지 전환 시 재초기화 방지: sessionStorage 캐시 우선 사용
+      const cached = readCache();
+      if (cached && cached.businessNumber) {
+        _serialNumber   = cached.serialNumber   || '';
+        _merchantId     = cached.merchantId     || '';
+        _businessNumber = cached.businessNumber || '';
+        return;
+      }
       try {
-        const merchant = await sdk.app.getMerchant();
-        _taxNo = merchant?.businessNumber ?? '';
+        const [serial, merchant] = await Promise.all([
+          sdk.app.getSerialNumber(),
+          sdk.app.getMerchant(),
+        ]);
+        _serialNumber   = extractSerial(serial);
+        _merchantId     = String(merchant?.id ?? '');
+        _businessNumber = String(merchant?.businessNumber ?? '');
 
-        console.log('[ApiConfig] getMerchant 성공!');
-        console.log('  - businessNumber:', _taxNo);
-        console.log('  - merchant name:', merchant?.name ?? '(없음)');
-        console.log('  - 전체 merchant:', JSON.stringify(merchant));
+        console.log('[ApiConfig] Toss SDK 값 로드 완료');
+        console.log('  - serialNumber (raw):', JSON.stringify(serial));
+        console.log('  - serialNumber:',    _serialNumber);
+        console.log('  - merchantId:',      _merchantId);
+        console.log('  - businessNumber:',  _businessNumber);
 
-        // 값이 없으면 경고
-        if (!_taxNo || _taxNo === '0000000000') {
-          console.warn('[ApiConfig] ⚠️ 경고: businessNumber 가 없거나 기본값입니다!');
-        } else {
-          console.log('[ApiConfig] ✓ businessNumber 정상 할당됨:', _taxNo);
+        if (!_serialNumber) {
+          console.warn('[ApiConfig] ⚠️ serialNumber 를 추출하지 못했습니다. raw 값 확인 필요');
         }
+        if (!_businessNumber || _businessNumber === '0000000000') {
+          console.warn('[ApiConfig] ⚠️ businessNumber 가 비어있거나 기본값입니다!');
+        }
+
+        writeCache({
+          serialNumber:   _serialNumber,
+          merchantId:     _merchantId,
+          businessNumber: _businessNumber,
+        });
       } catch (e) {
-        console.error('[ApiConfig] ❌ getMerchant 실패:', e);
-        _taxNo = '';
+        console.error('[ApiConfig] ❌ Toss SDK 읽기 실패:', e);
       }
     })();
     return _initPromise;
   }
 
   return Object.freeze({
-    get baseUrl()  { return isDev ? BASE_URL_DEV : BASE_URL_PROD; },
+    get baseUrl()        { return BASE_URL; },
     cmptrName: 'TossFront_Plugin',
     posVer:    '1.0.0',
     posGubn:   'CP',
-    get taxNo()    { return _taxNo; },
+
+    // Toss SDK 값 3종
+    get serialNumber()   { return _serialNumber; },
+    get merchantId()     { return _merchantId; },
+    get businessNumber() { return _businessNumber; },
+
+    // TAXNO 는 businessNumber 와 동일 (호환용 alias)
+    get taxNo()          { return _businessNumber; },
+
     ensureInit,
   });
 })();
 
-
 /* ===== src\shared\constants\storage-keys.js ===== */
+/**
+ * StorageKeys — sdk.storage 키 모음.
+ *
+ * Android: ConfigKey (DataStore Preferences key)
+ *
+ * 키 명명 규칙: settings_<feature>_<name>  (snake_case)
+ */
 window.StorageKeys = Object.freeze({
   BAUD_RATE:            'settings_baud_rate',
   SHOW_STORE_NAME:      'settings_show_store_name',
+
+  // 포인트 사용 — 최소 사용 포인트 (단위: P)
   MIN_POINT:            'settings_min_point',
+  // 최소 사용 포인트 활성 여부 ("true" / "false") — MIN_POINT > 0 시 자동 true
   IS_MIN_POINT_ENABLED: 'settings_is_min_point_enabled',
+
+  // renderResultPage 자동 종료 시간 (초 단위, SDK 가 3~10 으로 clamp)
   RESULT_TIMEOUT_SECONDS: 'settings_result_timeout_seconds',
 });
 
 window.StorageDefaults = Object.freeze({
-  MIN_POINT:            1000,
-  IS_MIN_POINT_ENABLED: true,
-  RESULT_TIMEOUT_SECONDS: 5,
+  MIN_POINT:            1000,   // Android ConfigRepository.MINIMUM_POINT 기본값과 동일
+  IS_MIN_POINT_ENABLED: true,   // Android ConfigRepository.IS_MIN_POINT_ENABLED 기본값과 동일
+  RESULT_TIMEOUT_SECONDS: 5,    // 기존 ResultPageService.DEFAULT_TIMEOUT_MS=5000 과 동일
 });
 
-
-/* ===== src\shared\http\http-client.js ===== */
+/* ===== src\shared\http\token-storage.js ===== */
 /**
- * PharmHttpClient — 암호화 인터셉터가 적용된 HTTP 클라이언트
+ * TokenStorage — 팜포인트 인증 토큰 저장/조회 (localStorage 기반).
  *
- * Android CryptoInterceptor 동일 로직:
- *   - GET: 모든 쿼리 파라미터 값 CresotyCrypt 암호화
- *   - POST: 본문 JSON 의 모든 문자열 값(중첩 객체/배열 포함) CresotyCrypt 암호화
- *   - 응답: ^ 를 포함한 문자열 값 자동 복호화
- *
- * 의존: CresotyCrypt (shared/utils/crypt.js), ApiConfig (shared/constants/api-config.js)
+ * 저장 항목:
+ *   - token         : Bearer 토큰 (API 호출 시 Authorization 헤더)
+ *   - refreshToken  : 토큰 만료 시 재발급용
  */
-window.PharmHttpClient = (function () {
-  function encryptParams(params) {
-    const result = {};
-    for (const [key, value] of Object.entries(params)) {
-      result[key] = CresotyCrypt.getEncode(String(value));
-    }
-    return result;
+window.TokenStorage = (function () {
+  const KEY_TOKEN         = 'pharmpoint_token';
+  const KEY_REFRESH_TOKEN = 'pharmpoint_refresh_token';
+
+  function getToken() {
+    return localStorage.getItem(KEY_TOKEN) || '';
   }
 
-  function encryptJson(data) {
-    if (data === null || data === undefined) return data;
-    if (Array.isArray(data)) return data.map(encryptJson);
-    if (typeof data === 'object') {
-      const out = {};
-      for (const [k, v] of Object.entries(data)) {
-        if (v === null || v === undefined) continue;
-        out[k] = encryptJson(v);
-      }
-      return out;
-    }
-    if (typeof data === 'string') return CresotyCrypt.getEncode(data);
-    return data;
+  function getRefreshToken() {
+    return localStorage.getItem(KEY_REFRESH_TOKEN) || '';
   }
 
-  function decryptJson(data) {
-    if (Array.isArray(data)) return data.map(decryptJson);
-    if (data !== null && typeof data === 'object') {
-      return Object.fromEntries(
-        Object.entries(data).map(([k, v]) => [k, decryptJson(v)])
-      );
-    }
-    if (typeof data === 'string' && data.includes('^')) {
-      try { return CresotyCrypt.getDecode(data); } catch { return data; }
-    }
-    return data;
+  function save(token, refreshToken) {
+    if (token)        localStorage.setItem(KEY_TOKEN, token);
+    if (refreshToken) localStorage.setItem(KEY_REFRESH_TOKEN, refreshToken);
   }
 
-  async function get(path, params = {}) {
-    await ApiConfig.ensureInit();
-    const url = new URL(`${ApiConfig.baseUrl}${path}`);
-    for (const [key, value] of Object.entries(encryptParams(params))) {
-      url.searchParams.set(key, value);
-    }
-    const response = await fetch(url.toString(), { method: 'GET' });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return decryptJson(await response.json());
+  function clear() {
+    localStorage.removeItem(KEY_TOKEN);
+    localStorage.removeItem(KEY_REFRESH_TOKEN);
   }
 
-  async function post(path, body = {}) {
-    await ApiConfig.ensureInit();
+  return { getToken, getRefreshToken, save, clear };
+})();
+
+/* ===== src\shared\http\auth-service.js ===== */
+/**
+ * AuthService — 팜포인트 인증 API 호출 (enroll / token 갱신).
+ *
+ * 엔드포인트:
+ *   - POST /api/v1/point/auth/enroll  : 최초 기기 등록. password 필드 없이 SDK 3값으로 등록.
+ *   - POST /api/v1/point/auth/token   : refreshToken 으로 access token 재발급.
+ *
+ * 응답: { token, refreshToken } → TokenStorage 에 저장.
+ *
+ * 의존: ApiConfig, TokenStorage
+ */
+window.AuthService = (function () {
+  const ENROLL_PATH  = '/api/v1/point/auth/enroll';
+  const REFRESH_PATH = '/api/v1/point/auth/token';
+
+  async function postJson(path, body) {
     const url = `${ApiConfig.baseUrl}${path}`;
     const response = await fetch(url, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json; charset=UTF-8' },
-      body:    JSON.stringify(encryptJson(body)),
+      body:    JSON.stringify(body),
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return decryptJson(await response.json());
+    if (!response.ok) {
+      throw new Error(`AuthService ${path} failed: HTTP ${response.status}`);
+    }
+    return response.json();
   }
 
-  return { get, post }; 
+  /**
+   * 최초 기기 등록. SDK 3값으로 호출 (password 없이).
+   * 성공 시 token / refreshToken 저장 후 token 반환.
+   */
+  async function enroll() {
+    await ApiConfig.ensureInit();
+    const data = await postJson(ENROLL_PATH, {
+      businessRegistrationNumber: ApiConfig.businessNumber,
+      tossPlaceSerialNumber:      ApiConfig.serialNumber,
+      tossPlaceMerchantId:        ApiConfig.merchantId,
+    });
+    const token        = data.token        ?? '';
+    const refreshToken = data.refreshToken ?? '';
+    if (!token || !refreshToken) {
+      throw new Error('AuthService.enroll: token/refreshToken 응답 누락');
+    }
+    TokenStorage.save(token, refreshToken);
+    console.log('[AuthService] enroll 성공, 토큰 저장 완료');
+    return token;
+  }
+
+  /**
+   * refreshToken 으로 access token 재발급. 성공 시 저장값 교체 후 새 token 반환.
+   * refreshToken 이 없거나 서버가 거부하면 throw → 호출부에서 enroll 로 fallback.
+   */
+  async function refresh() {
+    await ApiConfig.ensureInit();
+    const refreshToken = TokenStorage.getRefreshToken();
+    if (!refreshToken) {
+      throw new Error('AuthService.refresh: refreshToken 없음');
+    }
+    const data = await postJson(REFRESH_PATH, {
+      businessRegistrationNumber: ApiConfig.businessNumber,
+      tossPlaceSerialNumber:      ApiConfig.serialNumber,
+      tossPlaceMerchantId:        ApiConfig.merchantId,
+      refreshToken,
+    });
+    const newToken        = data.token        ?? '';
+    const newRefreshToken = data.refreshToken ?? '';
+    if (!newToken || !newRefreshToken) {
+      throw new Error('AuthService.refresh: token/refreshToken 응답 누락');
+    }
+    TokenStorage.save(newToken, newRefreshToken);
+    console.log('[AuthService] refresh 성공, 토큰 갱신 완료');
+    return newToken;
+  }
+
+  /**
+   * 사용 가능한 토큰 확보:
+   *   1) refreshToken 있으면 refresh 시도
+   *   2) 실패하거나 refreshToken 없으면 enroll
+   *
+   * 앱 초기화 시 호출.
+   */
+  async function ensureToken() {
+    const refreshToken = TokenStorage.getRefreshToken();
+    if (refreshToken) {
+      try {
+        return await refresh();
+      } catch (e) {
+        console.warn('[AuthService] refresh 실패, enroll 재시도:', e.message);
+        TokenStorage.clear();
+      }
+    }
+    return await enroll();
+  }
+
+  return { enroll, refresh, ensureToken };
 })();
 
+/* ===== src\shared\http\http-client.js ===== */
+/**
+ * PharmHttpClient — 팜포인트 API 호출용 HTTP 클라이언트.
+ *
+ * 이전 CresotyCrypt 암호화 로직 완전 제거. 대신 Bearer 토큰 인증 사용.
+ *
+ * 동작:
+ *   - 모든 요청에 Authorization: Bearer {token} 헤더 자동 주입
+ *   - 401 응답 시 AuthService.refresh 로 토큰 재발급 후 원래 요청 자동 재시도
+ *   - refresh 도 실패하면 enroll fallback (AuthService 내부 처리)
+ *
+ * 의존: ApiConfig, TokenStorage, AuthService
+ */
+window.PharmHttpClient = (function () {
+  function buildAuthHeader() {
+    const token = TokenStorage.getToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
+  async function sendRequest(method, url, body) {
+    const headers = {
+      'Content-Type': 'application/json; charset=UTF-8',
+      ...buildAuthHeader(),
+    };
+    const init = { method, headers };
+    if (body !== undefined) init.body = JSON.stringify(body);
+    // 요청 로깅 — 서버 응답이 "필수값 없음" 등일 때 어떤 값이 실제로 나갔는지 확인용
+    console.log('[HTTP] →', method, url, body !== undefined ? JSON.stringify(body) : '(no body)');
+    const response = await fetch(url, init);
+    console.log('[HTTP] ←', response.status, method, url);
+    return response;
+  }
+
+  /**
+   * 401 감지 시 재발급 후 1회 재시도.
+   */
+  async function requestWithAuth(method, url, body) {
+    let response = await sendRequest(method, url, body);
+    if (response.status === 401) {
+      console.log('[PharmHttpClient] 401 감지, 토큰 재발급 시도');
+      try {
+        await AuthService.refresh();
+      } catch (e) {
+        console.warn('[PharmHttpClient] refresh 실패, enroll fallback:', e.message);
+        await AuthService.enroll();
+      }
+      response = await sendRequest(method, url, body);
+    }
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} ${method} ${url}`);
+    }
+    const json = await response.json();
+    // 응답 body 로그 — 서버가 status 200 + CODE!='0000' 로 실패를 표시하는 경우 원인 파악용
+    console.log('[HTTP] body', method, url, JSON.stringify(json));
+    return json;
+  }
+
+  /**
+   * 토큰이 없으면 최초 발급(enroll or refresh) 을 수행. 첫 호출 시 1회만 발생.
+   */
+  async function ensureAuth() {
+    if (TokenStorage.getToken()) return;
+    await AuthService.ensureToken();
+  }
+
+  async function get(path, params = {}) {
+    await ApiConfig.ensureInit();
+    await ensureAuth();
+    const url = new URL(`${ApiConfig.baseUrl}${path}`);
+    for (const [key, value] of Object.entries(params)) {
+      if (value === null || value === undefined || value === '') continue;
+      url.searchParams.set(key, String(value));
+    }
+    return requestWithAuth('GET', url.toString(), undefined);
+  }
+
+  async function post(path, body = {}) {
+    await ApiConfig.ensureInit();
+    await ensureAuth();
+    const url = `${ApiConfig.baseUrl}${path}`;
+    return requestWithAuth('POST', url, body);
+  }
+
+  return { get, post };
+})();
 
 /* ===== src\shared\socket\protocol\socket-constants.js ===== */
 /**
@@ -281,7 +400,6 @@ window.SocketConstants = Object.freeze({
   KOR_CHARSET: 'euc-kr',
 });
 
-
 /* ===== src\shared\socket\socket-events.js ===== */
 /**
  * SocketEvent — 소켓에서 파싱된 도메인 이벤트 타입 (Android SocketEvent 미러)
@@ -307,7 +425,6 @@ window.SocketEvent = Object.freeze({
   CatUsePointNoCustomer:    'CAT_USE_POINT_NO_CUSTOMER',     // 006
   CatUsePointWithCustomer:  'CAT_USE_POINT_WITH_CUSTOMER',   // 007
 });
-
 
 /* ===== src\shared\socket\protocol\catpos-codec.js ===== */
 /**
@@ -388,7 +505,6 @@ window.CatposCodec = (function () {
     ackUsePointResult, ackUsePointWithCustomer,
   };
 })();
-
 
 /* ===== src\shared\socket\protocol\terminal-codec.js ===== */
 /**
@@ -560,7 +676,6 @@ window.TerminalCodec = (function () {
   };
 })();
 
-
 /* ===== src\shared\socket\socket-config.js ===== */
 /**
  * SocketConfig — 소켓 통신 런타임 설정.
@@ -579,7 +694,6 @@ window.SocketConfig = (function () {
     baudRate:   9600,
   });
 })();
-
 
 /* ===== src\shared\socket\transport\websocket-transport.js ===== */
 /**
@@ -702,7 +816,6 @@ window.WebSocketTransport = (function () {
 
   return { create };
 })();
-
 
 /* ===== src\shared\socket\transport\serial-transport.js ===== */
 /**
@@ -844,7 +957,6 @@ window.SerialTransport = (function () {
 
   return { create };
 })();
-
 
 /* ===== src\shared\socket\socket-gateway.js ===== */
 /**
@@ -1030,7 +1142,6 @@ window.SocketGateway = (function () {
   return instance;
 })();
 
-
 /* ===== src\features\transaction-parser\transaction-parser.service.js ===== */
 /**
  * TransactionParserService — 소켓 raw 필드 → 구조화된 TransactionData 변환.
@@ -1210,7 +1321,6 @@ window.TransactionParserService = (function () {
   };
 })();
 
-
 /* ===== src\features\point-inquiry\point-inquiry.service.js ===== */
 /**
  * PointInquiryService — 고객 조회 / 포인트 잔액 조회
@@ -1284,7 +1394,6 @@ window.PointInquiryService = (function () {
   return { getCustomer, getPointBalance };
 })();
 
-
 /* ===== src\features\point-settings\point-settings.service.js ===== */
 /**
  * PointSettingsService — 포인트 적립/사용 설정 조회
@@ -1341,7 +1450,6 @@ window.PointSettingsService = (function () {
 
   return { getPointSaveSetting, getPointAmountSetting };
 })();
-
 
 /* ===== src\features\point-transaction\point-transaction.service.js ===== */
 /**
@@ -1511,7 +1619,6 @@ window.PointTransactionService = (function () {
   return { estimatePoint, commitBySleSeq, commitBySinglePayment, commitByMultiplePayment };
 })();
 
-
 /* ===== src\features\point-estimate\point-estimate.service.js ===== */
 /**
  * PointEstimateService — 포인트 적립 예상치 조회
@@ -1607,7 +1714,6 @@ window.PointEstimateService = (function () {
   return { estimateSingle, estimateComplex };
 })();
 
-
 /* ===== src\features\point-earn\point-earn.service.js ===== */
 /**
  * PointEarnService — 포인트 적립 orchestration.
@@ -1619,7 +1725,7 @@ window.PointEstimateService = (function () {
  *      - 복합결제      → ByMultiplePayment
  *      - 단건결제      → BySinglePayment
  *
- * 의존: PointTransactionService
+ * 의존: PointTransactionService, SocketGateway, PointUseSource
  */
 window.PointEarnService = (function () {
 
@@ -1700,6 +1806,11 @@ window.PointEarnService = (function () {
     return commit({ ...cmd, sleSeq: '' });
   }
 
+  /**
+   * 적립 취소 — source 채널에 따라 실패 응답.
+   * Android: PhoneNumberInputViewModel.OnClickClose → sendCATFail / sendTerminalInit
+   * @param {{ source: string }} input
+   */
   async function cancelEarn({ source }) {
     if (source === PointUseSource.TERMINAL) {
       return SocketGateway.sendTerminalInit();
@@ -1711,7 +1822,6 @@ window.PointEarnService = (function () {
 
   return { estimate, commit, commitWithFallback, cancelEarn };
 })();
-
 
 /* ===== src\features\point-use\point-use.service.js ===== */
 /**
@@ -1835,7 +1945,6 @@ window.PointUseService = (function () {
   };
 })();
 
-
 /* ===== src\features\result-page\result-page.service.js ===== */
 /**
  * ResultPageService — sdk.template.renderResultPage 호출 헬퍼.
@@ -1945,6 +2054,10 @@ window.ResultPageService = (function () {
     });
   }
 
+  /**
+   * 최소 사용 포인트 설정 완료.
+   * @param {{minPoint:number, onTimeout?:()=>void, timerMs?:number}} args
+   */
   function showMinPointSaved({ minPoint, onTimeout, timerMs }) {
     return render({
       type:        'image',
@@ -1955,6 +2068,10 @@ window.ResultPageService = (function () {
     });
   }
 
+  /**
+   * 화면 대기 시간 설정 완료.
+   * @param {{seconds:number, onTimeout?:()=>void, timerMs?:number}} args
+   */
   function showTimeoutSaved({ seconds, onTimeout, timerMs }) {
     return render({
       type:        'image',
@@ -1974,7 +2091,6 @@ window.ResultPageService = (function () {
     showTimeoutSaved,
   };
 })();
-
 
 /* ===== src\features\app-session\app-session.service.js ===== */
 /**
@@ -2138,8 +2254,19 @@ window.AppSession = (function () {
   return { start, stop, setConfig, refreshConfig };
 })();
 
-
 /* ===== src\features\app-config\app-config.service.js ===== */
+/**
+ * AppConfigService — sdk.storage 기반 환경설정 read/write 래퍼.
+ *
+ * Android: ConfigRepositoryImpl (DataStore Preferences)
+ *
+ * 책임:
+ *   - 키별 기본값 적용
+ *   - 타입 변환 (string ↔ number/boolean)
+ *   - minPoint > 0 일 때 isMinPointEnabled 자동 동기화
+ *
+ * 의존: sdk.storage, StorageKeys, StorageDefaults
+ */
 window.AppConfigService = (function () {
 
   async function readString(key, fallback) {
@@ -2160,6 +2287,9 @@ window.AppConfigService = (function () {
     }
   }
 
+  // ── 최소 사용 포인트 ─────────────────────────────
+
+  /** @returns {Promise<number>} (저장 없음 → StorageDefaults.MIN_POINT) */
   async function getMinPoint() {
     const raw = await readString(StorageKeys.MIN_POINT, null);
     if (raw === null || raw === undefined || raw === '') return StorageDefaults.MIN_POINT;
@@ -2167,12 +2297,17 @@ window.AppConfigService = (function () {
     return Number.isFinite(n) && n >= 0 ? n : StorageDefaults.MIN_POINT;
   }
 
+  /** @returns {Promise<boolean>} (저장 없음 → StorageDefaults.IS_MIN_POINT_ENABLED) */
   async function isMinPointEnabled() {
     const raw = await readString(StorageKeys.IS_MIN_POINT_ENABLED, null);
     if (raw === null || raw === undefined || raw === '') return StorageDefaults.IS_MIN_POINT_ENABLED;
     return raw === 'true';
   }
 
+  /**
+   * minPoint 저장. 0 → IS_MIN_POINT_ENABLED=false, >0 → true 로 자동 동기화.
+   * @param {number} minPoint
+   */
   async function setMinPoint(minPoint) {
     const n = Math.max(0, parseInt(minPoint, 10) || 0);
     await writeString(StorageKeys.MIN_POINT, n);
@@ -2180,19 +2315,27 @@ window.AppConfigService = (function () {
     return { minPoint: n, isMinPointEnabled: n > 0 };
   }
 
+  /** 일괄 조회 — AppSession.setConfig 에 전달용. */
   async function getPointUseConfig() {
     const [minPoint, enabled] = await Promise.all([getMinPoint(), isMinPointEnabled()]);
     return { minPoint, isMinPointEnabled: enabled };
   }
 
+  // ── 대기 화면 매장명 표시 ────────────────────────────
+
+  /** @returns {Promise<boolean>} (저장 없음 → true) */
   async function getShowStoreName() {
     const raw = await readString(StorageKeys.SHOW_STORE_NAME, null);
     return raw === null || raw === undefined || raw === '' ? true : raw === 'true';
   }
 
+  // ── 결과 화면 대기 시간 ─────────────────────────────
+  // SDK ResultPage 가 timerMs 를 [3, 10] 초로 clamp 함 (cdn.tossplace.com TIMER_MIN/MAX_SECONDS).
+
   const TIMEOUT_MIN_SECONDS = 3;
   const TIMEOUT_MAX_SECONDS = 10;
 
+  /** @returns {Promise<number>} 3~10 초 (저장 없음 → StorageDefaults.RESULT_TIMEOUT_SECONDS) */
   async function getResultTimeoutSeconds() {
     const raw = await readString(StorageKeys.RESULT_TIMEOUT_SECONDS, null);
     if (raw === null || raw === undefined || raw === '') return StorageDefaults.RESULT_TIMEOUT_SECONDS;
@@ -2201,10 +2344,16 @@ window.AppConfigService = (function () {
     return Math.min(Math.max(n, TIMEOUT_MIN_SECONDS), TIMEOUT_MAX_SECONDS);
   }
 
+  /** @returns {Promise<number>} ms 단위 */
   async function getResultTimeoutMs() {
     return (await getResultTimeoutSeconds()) * 1000;
   }
 
+  /**
+   * 결과 화면 대기 시간 저장.
+   * @param {number} seconds — 3~10 사이로 clamp 됨
+   * @returns {Promise<number>} 실제 저장된 초
+   */
   async function setResultTimeoutSeconds(seconds) {
     const parsed = parseInt(seconds, 10);
     const base = Number.isFinite(parsed) ? parsed : StorageDefaults.RESULT_TIMEOUT_SECONDS;
@@ -2225,80 +2374,3 @@ window.AppConfigService = (function () {
   };
 })();
 
-// ── 커스텀 앱 토스트 (하단 CTA 버튼 위 위치) ──
-(function () {
-  if (window.AppToast) return;
-
-  const style = document.createElement('style');
-  style.textContent = `
-    .app-toast {
-      position: fixed;
-      bottom: 96px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #4e5968;
-      color: #fff;
-      border-radius: 24px;
-      padding: 12px 22px;
-      font-size: 15px;
-      line-height: 1.4;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.18);
-      z-index: 100;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.2s, transform 0.2s;
-      max-width: 90%;
-      white-space: nowrap;
-    }
-    .app-toast.show { opacity: 1; transform: translate(-50%, -4px); }
-
-    /* 모든 인터랙티브 요소의 focus outline + 탭 하이라이트 제거 (전역) */
-    *, *::before, *::after { -webkit-tap-highlight-color: transparent !important; }
-    button, a, input, label, [role="button"], [tabindex] { outline: none !important; }
-    button:focus, button:focus-visible,
-    a:focus, a:focus-visible,
-    input:focus, input:focus-visible,
-    label:focus, label:focus-visible,
-    [role="button"]:focus, [tabindex]:focus { outline: none !important; box-shadow: none !important; }
-    .footer-confirm {
-      transition: transform 0.1s ease-out, background 0.15s;
-    }
-    .footer-confirm:active:not(:disabled) {
-      transform: scale(0.97);
-    }
-    .header-back { transition: opacity 0.1s; }
-    .header-back:active { opacity: 0.5; }
-  `;
-  document.head.appendChild(style);
-
-  let timer = null;
-  let el = null;
-  function show(message) {
-    if (!el) {
-      el = document.createElement('div');
-      el.className = 'app-toast';
-      document.body.appendChild(el);
-    }
-    el.textContent = message;
-    el.classList.add('show');
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(() => el && el.classList.remove('show'), 3000);
-  }
-
-  window.AppToast = { show };
-
-  // sdk.template.openToast 호출도 커스텀 토스트로 redirect
-  if (window.sdk && sdk.template && typeof sdk.template.openToast === 'function') {
-    sdk.template.openToast = function ({ message }) { show(message); };
-  } else {
-    // sdk 가 아직 미준비면 다음 틱에 override
-    setTimeout(() => {
-      if (window.sdk && sdk.template) {
-        sdk.template.openToast = function ({ message }) { show(message); };
-      }
-    }, 0);
-  }
-})();

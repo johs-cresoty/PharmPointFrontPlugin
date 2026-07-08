@@ -16,3 +16,18 @@ body {
   width: 400px;
   height: 640px;
 }
+
+/* 버튼/링크/입력요소 포커스·탭 시 노란 테두리 / 하이라이트 완전 제거
+   Toss SDK 가 렌더링한 back 버튼 등 SDK 요소까지 커버되도록 전역 override. */
+*:focus,
+*:focus-visible,
+*:focus-within,
+*:active {
+  outline: none !important;
+  outline-color: transparent !important;
+  box-shadow: none !important;
+}
+button, a, input, textarea, select, [role="button"], [tabindex] {
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-focus-ring-color: transparent !important;
+}
