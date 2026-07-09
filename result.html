@@ -44,6 +44,7 @@
               earnPoint:    data.earnPoint,
               storeName:    data.storeName,
               balancePoint: data.balancePoint,
+              customerName: data.customerName,
               onTimeout, buttons,
             });
 
@@ -52,6 +53,7 @@
               usePoint:       data.usePoint,
               storeName:      data.storeName,
               remainingPoint: data.remainingPoint,
+              customerName:   data.customerName,
               onTimeout, buttons,
             });
 
@@ -74,32 +76,20 @@
 
       function renderLookup(data) {
         if (data.success && data.customer) {
-          const { customerName, pointBalance } = data.customer;
-          sdk.template.renderResultPage({
-            type:        'image',
-            status:      'success',
-            title:       `${(pointBalance ?? 0).toLocaleString()}P 보유`,
-            description: `${customerName ?? ''} 님`,
-            timerMs:     5000,
-            buttons:     [HOME_BUTTON],
-            onTimeout:   goHome,
-            localeCode:  'ko',
+          return ResultPageService.showLookupSuccess({
+            customerName: data.customer.customerName,
+            pointBalance: data.customer.pointBalance,
+            onTimeout:    goHome,
+            buttons:      [HOME_BUTTON],
           });
-          return;
         }
-
-        sdk.template.renderResultPage({
-          type:        'image',
-          status:      'error',
-          title:       data.error || '등록된 회원이 없습니다.',
-          description: '전화번호를 다시 확인해주세요',
-          timerMs:     5000,
+        return ResultPageService.showLookupFail({
+          error:     data.error,
+          onTimeout: goHome,
           buttons: [
             { label: '다시 입력', closeOnClick: true, onClick: goSearch },
             HOME_BUTTON,
           ],
-          onTimeout:   goHome,
-          localeCode:  'ko',
         });
       }
 

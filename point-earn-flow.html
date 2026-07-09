@@ -169,6 +169,7 @@
 
         const balancePoint = parseInt(commitResult.data?.pointBalance, 10) || 0;
         const earnPoint = estimatedPoint || (parseInt(commitResult.data?.pointAmount, 10) || 0);
+        const customerName = commitResult.data?.customerName || '';
         const storeName = await getStoreName();
 
         clearContext();
@@ -176,6 +177,7 @@
           earnPoint,
           storeName,
           balancePoint,
+          customerName,
         });
       }
 

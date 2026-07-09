@@ -18,19 +18,19 @@ window.ResultNavigator = (function () {
   }
 
   /** 적립 완료 */
-  function goEarnSuccess({ earnPoint, storeName, balancePoint, onTimeoutHref }) {
+  function goEarnSuccess({ earnPoint, storeName, balancePoint, customerName, onTimeoutHref }) {
     _navigate({
       type: 'earn',
-      data: { earnPoint, storeName, balancePoint },
+      data: { earnPoint, storeName, balancePoint, customerName },
       onTimeoutHref: onTimeoutHref || DEFAULT_HOME,
     });
   }
 
   /** 사용 완료 */
-  function goUseSuccess({ usePoint, storeName, remainingPoint, onTimeoutHref }) {
+  function goUseSuccess({ usePoint, storeName, remainingPoint, customerName, onTimeoutHref }) {
     _navigate({
       type: 'use',
-      data: { usePoint, storeName, remainingPoint },
+      data: { usePoint, storeName, remainingPoint, customerName },
       onTimeoutHref: onTimeoutHref || DEFAULT_HOME,
     });
   }

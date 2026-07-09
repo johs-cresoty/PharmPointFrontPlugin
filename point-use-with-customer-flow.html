@@ -101,6 +101,12 @@
       }
 
       function renderUseInputStep({ ctx, balance, payAmount, minPoint, isMinPointEnabled, storeName }) {
+        // 화면 전환 시 SDK 가 키패드 크기·상단 문구를 순차 조정하는 튐(약 100~200ms) 을 완화하기 위해
+        // #app 을 opacity 0 상태로 렌더한 뒤 안정화 후 페이드인.
+        const app = document.getElementById('app');
+        app.style.transition = 'opacity 0.25s ease-in';
+        app.style.opacity = '0';
+
         const maxPoint = Math.min(balance, payAmount || balance);
 
         const disclaimer = isMinPointEnabled && minPoint > 0
@@ -166,6 +172,9 @@
 
         // Toss 가 버튼 렌더한 직후 비활성 상태 초기화
         setTimeout(syncTossUseBtnState, 0);
+
+        // 렌더 안정화 후 페이드인 (튐 100~200ms 이후로 여유)
+        setTimeout(() => { app.style.opacity = '1'; }, 300);
       }
 
       // ── entry ───────────────────────────────────────

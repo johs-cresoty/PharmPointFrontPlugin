@@ -50,30 +50,35 @@ window.ResultPageService = (function () {
     return sdk.template.renderResultPage(params);
   }
 
+  /** 회원명 접두어 — 있으면 "홍길동 님, " 형태, 없으면 빈 문자열 */
+  function customerPrefix(customerName) {
+    return customerName ? `${customerName} 님, ` : '';
+  }
+
   /**
    * 적립 완료.
-   * @param {{earnPoint:number, storeName:string, balancePoint:number, onTimeout?:()=>void, timerMs?:number, buttons?:Array}} args
+   * @param {{earnPoint:number, storeName:string, balancePoint:number, customerName?:string, onTimeout?:()=>void, timerMs?:number, buttons?:Array}} args
    */
-  function showEarnSuccess({ earnPoint, storeName, balancePoint, onTimeout, timerMs, buttons }) {
+  function showEarnSuccess({ earnPoint, storeName, balancePoint, customerName, onTimeout, timerMs, buttons }) {
     return render({
       type:        'image',
       status:      'success',
       title:       `${fmtPoint(earnPoint)}P 적립 완료`,
-      description: `${fmtPoint(balancePoint)}P 있어요`,
+      description: `${customerPrefix(customerName)}${fmtPoint(balancePoint)}P 있어요`,
       onTimeout, timerMs, buttons,
     });
   }
 
   /**
    * 사용 완료.
-   * @param {{usePoint:number, storeName:string, remainingPoint:number, onTimeout?:()=>void, timerMs?:number, buttons?:Array}} args
+   * @param {{usePoint:number, storeName:string, remainingPoint:number, customerName?:string, onTimeout?:()=>void, timerMs?:number, buttons?:Array}} args
    */
-  function showUseSuccess({ usePoint, storeName, remainingPoint, onTimeout, timerMs, buttons }) {
+  function showUseSuccess({ usePoint, storeName, remainingPoint, customerName, onTimeout, timerMs, buttons }) {
     return render({
       type:        'image',
       status:      'success',
       title:       `${fmtPoint(usePoint)}P 사용완료`,
-      description: `${fmtPoint(remainingPoint)}P 남았어요`,
+      description: `${customerPrefix(customerName)}${fmtPoint(remainingPoint)}P 남았어요`,
       onTimeout, timerMs, buttons,
     });
   }
@@ -102,6 +107,34 @@ window.ResultPageService = (function () {
       text:        `보유 포인트 ${fmtPoint(balancePoint)}P`,
       title:       storeName,
       description: '현재 보유하고 있는 포인트입니다.',
+      onTimeout, timerMs, buttons,
+    });
+  }
+
+  /**
+   * 조회 성공 — 회원명 + 잔액 표시.
+   * @param {{customerName:string, pointBalance:number, onTimeout?:()=>void, timerMs?:number, buttons?:Array}} args
+   */
+  function showLookupSuccess({ customerName, pointBalance, onTimeout, timerMs, buttons }) {
+    return render({
+      type:        'image',
+      status:      'success',
+      title:       `${fmtPoint(pointBalance)}P 보유`,
+      description: `${customerName ?? ''} 님`,
+      onTimeout, timerMs, buttons,
+    });
+  }
+
+  /**
+   * 조회 실패 — 미등록 회원 안내.
+   * @param {{error?:string, onTimeout?:()=>void, timerMs?:number, buttons?:Array}} args
+   */
+  function showLookupFail({ error, onTimeout, timerMs, buttons }) {
+    return render({
+      type:        'image',
+      status:      'error',
+      title:       error || '등록된 회원이 없습니다.',
+      description: '전화번호를 다시 확인해주세요',
       onTimeout, timerMs, buttons,
     });
   }
@@ -139,6 +172,8 @@ window.ResultPageService = (function () {
     showUseSuccess,
     showInsufficientPoint,
     showLookupResult,
+    showLookupSuccess,
+    showLookupFail,
     showMinPointSaved,
     showTimeoutSaved,
   };
