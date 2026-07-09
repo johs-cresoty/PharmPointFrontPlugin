@@ -2000,57 +2000,57 @@ window.ResultPageService = (function () {
 
   /**
    * 적립 완료.
-   * @param {{earnPoint:number, storeName:string, balancePoint:number, onTimeout?:()=>void, timerMs?:number}} args
+   * @param {{earnPoint:number, storeName:string, balancePoint:number, onTimeout?:()=>void, timerMs?:number, buttons?:Array}} args
    */
-  function showEarnSuccess({ earnPoint, storeName, balancePoint, onTimeout, timerMs }) {
+  function showEarnSuccess({ earnPoint, storeName, balancePoint, onTimeout, timerMs, buttons }) {
     return render({
       type:        'image',
       status:      'success',
       title:       `${fmtPoint(earnPoint)}P 적립 완료`,
       description: `${fmtPoint(balancePoint)}P 있어요`,
-      onTimeout, timerMs,
+      onTimeout, timerMs, buttons,
     });
   }
 
   /**
    * 사용 완료.
-   * @param {{usePoint:number, storeName:string, remainingPoint:number, onTimeout?:()=>void, timerMs?:number}} args
+   * @param {{usePoint:number, storeName:string, remainingPoint:number, onTimeout?:()=>void, timerMs?:number, buttons?:Array}} args
    */
-  function showUseSuccess({ usePoint, storeName, remainingPoint, onTimeout, timerMs }) {
+  function showUseSuccess({ usePoint, storeName, remainingPoint, onTimeout, timerMs, buttons }) {
     return render({
       type:        'image',
       status:      'success',
       title:       `${fmtPoint(usePoint)}P 사용완료`,
       description: `${fmtPoint(remainingPoint)}P 남았어요`,
-      onTimeout, timerMs,
+      onTimeout, timerMs, buttons,
     });
   }
 
   /**
    * 포인트 부족. (image:error 타입은 text 필드 미지원 → 잔액은 description 에 포함)
-   * @param {{storeName:string, minPoint:number, balancePoint:number, onTimeout?:()=>void, timerMs?:number}} args
+   * @param {{storeName:string, minPoint:number, balancePoint:number, onTimeout?:()=>void, timerMs?:number, buttons?:Array}} args
    */
-  function showInsufficientPoint({ storeName, minPoint, balancePoint, onTimeout, timerMs }) {
+  function showInsufficientPoint({ storeName, minPoint, balancePoint, onTimeout, timerMs, buttons }) {
     return render({
       type:        'image',
       status:      'error',
       title:       '포인트 부족',
       description: `${storeName} 최소 ${fmtPoint(minPoint)}P부터 사용 가능합니다.\n보유 포인트 ${fmtPoint(balancePoint)}P`,
-      onTimeout, timerMs,
+      onTimeout, timerMs, buttons,
     });
   }
 
   /**
    * 조회 결과.
-   * @param {{storeName:string, balancePoint:number, onTimeout?:()=>void, timerMs?:number}} args
+   * @param {{storeName:string, balancePoint:number, onTimeout?:()=>void, timerMs?:number, buttons?:Array}} args
    */
-  function showLookupResult({ storeName, balancePoint, onTimeout, timerMs }) {
+  function showLookupResult({ storeName, balancePoint, onTimeout, timerMs, buttons }) {
     return render({
       type:        'text',
       text:        `보유 포인트 ${fmtPoint(balancePoint)}P`,
       title:       storeName,
       description: '현재 보유하고 있는 포인트입니다.',
-      onTimeout, timerMs,
+      onTimeout, timerMs, buttons,
     });
   }
 
@@ -2089,6 +2089,96 @@ window.ResultPageService = (function () {
     showLookupResult,
     showMinPointSaved,
     showTimeoutSaved,
+  };
+})();
+
+/* ===== src\features\result-page\result-navigator.js ===== */
+/**
+ * ResultNavigator — 결과 화면 페이지(result.html) 로의 이동을 캡슐화.
+ *
+ * 각 flow (earn / use / lookup 등) 는 결과 데이터를 sessionStorage 에 세팅한 뒤
+ * result.html 로 navigate 한다. result.html 은 이 컨텍스트를 읽어 SDK 결과 페이지를 렌더한다.
+ *
+ * ResultPageService 는 result.html 안에서만 사용된다 (SDK 호출 계층).
+ * flow 페이지는 반드시 ResultNavigator 를 통해 결과 화면을 표시한다.
+ */
+window.ResultNavigator = (function () {
+  const CTX_KEY     = 'pharm_result_ctx';
+  const RESULT_URL  = './result.html';
+  const DEFAULT_HOME = './home.html';
+
+  function _navigate(ctx) {
+    sessionStorage.setItem(CTX_KEY, JSON.stringify(ctx));
+    location.href = RESULT_URL;
+  }
+
+  /** 적립 완료 */
+  function goEarnSuccess({ earnPoint, storeName, balancePoint, onTimeoutHref }) {
+    _navigate({
+      type: 'earn',
+      data: { earnPoint, storeName, balancePoint },
+      onTimeoutHref: onTimeoutHref || DEFAULT_HOME,
+    });
+  }
+
+  /** 사용 완료 */
+  function goUseSuccess({ usePoint, storeName, remainingPoint, onTimeoutHref }) {
+    _navigate({
+      type: 'use',
+      data: { usePoint, storeName, remainingPoint },
+      onTimeoutHref: onTimeoutHref || DEFAULT_HOME,
+    });
+  }
+
+  /** 포인트 부족 */
+  function goInsufficient({ storeName, minPoint, balancePoint, onTimeoutHref }) {
+    _navigate({
+      type: 'insufficient',
+      data: { storeName, minPoint, balancePoint },
+      onTimeoutHref: onTimeoutHref || DEFAULT_HOME,
+    });
+  }
+
+  /** 조회 성공 */
+  function goLookupSuccess({ phone, customer, onTimeoutHref }) {
+    _navigate({
+      type: 'lookup',
+      data: { phone, customer, success: true },
+      onTimeoutHref: onTimeoutHref || DEFAULT_HOME,
+    });
+  }
+
+  /** 조회 실패 (등록되지 않은 회원 등) */
+  function goLookupFail({ phone, error, onTimeoutHref }) {
+    _navigate({
+      type: 'lookup',
+      data: { phone, success: false, error: error || '등록된 회원이 없습니다.' },
+      onTimeoutHref: onTimeoutHref || DEFAULT_HOME,
+    });
+  }
+
+  /**
+   * result.html 진입 시 저장된 컨텍스트를 읽고 sessionStorage 에서 제거.
+   * 없으면 null.
+   */
+  function readContext() {
+    try {
+      const raw = sessionStorage.getItem(CTX_KEY);
+      sessionStorage.removeItem(CTX_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      console.warn('[ResultNavigator] readContext parse 실패:', e);
+      return null;
+    }
+  }
+
+  return {
+    goEarnSuccess,
+    goUseSuccess,
+    goInsufficient,
+    goLookupSuccess,
+    goLookupFail,
+    readContext,
   };
 })();
 

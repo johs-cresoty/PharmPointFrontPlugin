@@ -1,82 +1,109 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link
-      rel="stylesheet"
-      href="https://static.toss.im/tds/43.9.4/css/tds.min.css"
-    />
-    <link
-      rel="stylesheet"
-      type="text/css"
-      href="https://static.toss.im/tps/main.css"
-    />
-    <link
-      rel="stylesheet"
-      type="text/css"
-      href="https://static.toss.im/tps/others.css"
-    />
+    <link rel="stylesheet" href="https://static.toss.im/tds/43.9.4/css/tds.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://static.toss.im/tps/main.css" />
+    <link rel="stylesheet" type="text/css" href="https://static.toss.im/tps/others.css" />
     <link rel="stylesheet" type="text/css" href="./global.css" />
     <script src="https://cdn.tossplace.com/toss-front-sdk/v0/index.js"></script>
     <script src="./sdk.js"></script>
-    <title>조회 결과</title>
+    <script src="./bundle.js"></script>
+    <title>결과</title>
   </head>
   <body>
     <div id="app"></div>
     <script>
-      const raw = sessionStorage.getItem('pharm_lookup_result');
-      const data = raw ? JSON.parse(raw) : null;
-      sessionStorage.removeItem('pharm_lookup_result');
+      // 통합 결과 화면.
+      //   type: 'earn' | 'use' | 'insufficient' | 'lookup'
+      //   data: type 별 필요 필드
+      //   onTimeoutHref: 타이머 종료 시 이동 경로 (기본 ./home.html)
+      // 컨텍스트는 ResultNavigator 로 세팅되고 여기서 소비된다.
 
-      const goHome = () => {
-        location.href = './home.html';
-      };
-      const goSearch = () => {
-        location.href = './member-search.html';
-      };
+      const ctx = ResultNavigator.readContext();
+      const goHome   = () => { location.href = ctx?.onTimeoutHref || './home.html'; };
+      const goSearch = () => { location.href = './member-search.html'; };
 
-      if (data && data.success && data.customer) {
-        const { customerName, pointBalance } = data.customer;
-        sdk.template.renderResultPage({
-          type: 'image',
-          status: 'success',
-          title: `${pointBalance.toLocaleString()}P 보유`,
-          description: `${customerName} 님`,
-        timerMs: 5000,
-        buttons: [
-          {
-            label: '처음으로',
-            closeOnClick: true,
-              onClick: goHome,
-          },
-        ],
-          onTimeout: goHome,
-          localeCode: 'ko',
-        });
-      } else {
-        sdk.template.renderResultPage({
-          type: 'image',
-          status: 'error',
-          title: data?.error || '등록된 회원이 없습니다.',
-          description: '전화번호를 다시 확인해주세요',
-          timerMs: 5000,
-          buttons: [
-            {
-              label: '다시 입력',
-              closeOnClick: true,
-              onClick: goSearch,
-            },
-            {
-              label: '처음으로',
-              closeOnClick: true,
-              onClick: goHome,
-            },
-          ],
-          onTimeout: goHome,
-        localeCode: 'ko',
-      });
+      // 모든 결과 화면 공통 하단 버튼
+      const HOME_BUTTON = { label: '처음으로', closeOnClick: true, onClick: goHome };
+
+      async function render() {
+        if (!ctx) {
+          goHome();
+          return;
+        }
+
+        const onTimeout = goHome;
+        const data = ctx.data || {};
+        const buttons = [HOME_BUTTON];
+
+        switch (ctx.type) {
+          case 'earn':
+            return ResultPageService.showEarnSuccess({
+              earnPoint:    data.earnPoint,
+              storeName:    data.storeName,
+              balancePoint: data.balancePoint,
+              onTimeout, buttons,
+            });
+
+          case 'use':
+            return ResultPageService.showUseSuccess({
+              usePoint:       data.usePoint,
+              storeName:      data.storeName,
+              remainingPoint: data.remainingPoint,
+              onTimeout, buttons,
+            });
+
+          case 'insufficient':
+            return ResultPageService.showInsufficientPoint({
+              storeName:    data.storeName,
+              minPoint:     data.minPoint,
+              balancePoint: data.balancePoint,
+              onTimeout, buttons,
+            });
+
+          case 'lookup':
+            return renderLookup(data);
+
+          default:
+            console.warn('[result.html] 알 수 없는 type:', ctx.type);
+            goHome();
+        }
       }
+
+      function renderLookup(data) {
+        if (data.success && data.customer) {
+          const { customerName, pointBalance } = data.customer;
+          sdk.template.renderResultPage({
+            type:        'image',
+            status:      'success',
+            title:       `${(pointBalance ?? 0).toLocaleString()}P 보유`,
+            description: `${customerName ?? ''} 님`,
+            timerMs:     5000,
+            buttons:     [HOME_BUTTON],
+            onTimeout:   goHome,
+            localeCode:  'ko',
+          });
+          return;
+        }
+
+        sdk.template.renderResultPage({
+          type:        'image',
+          status:      'error',
+          title:       data.error || '등록된 회원이 없습니다.',
+          description: '전화번호를 다시 확인해주세요',
+          timerMs:     5000,
+          buttons: [
+            { label: '다시 입력', closeOnClick: true, onClick: goSearch },
+            HOME_BUTTON,
+          ],
+          onTimeout:   goHome,
+          localeCode:  'ko',
+        });
+      }
+
+      render();
     </script>
   </body>
 </html>

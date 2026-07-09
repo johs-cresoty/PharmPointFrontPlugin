@@ -193,13 +193,13 @@
         const storeName = await getStoreName();
 
         if (insufficient) {
-          ResultPageService.showInsufficientPoint({
+          PointUseService.cancelUse({ source: ctx.source });
+          clearContext();
+          ResultNavigator.goInsufficient({
             storeName,
             minPoint:     cfg.minPoint,
             balancePoint: balance,
-            onTimeout: returnToIdle,
           });
-          PointUseService.cancelUse({ source: ctx.source });
           return;
         }
 
@@ -269,13 +269,12 @@
               usePoint,
             });
 
-            ResultPageService.showUseSuccess({
+            clearContext();
+            ResultNavigator.goUseSuccess({
               usePoint,
               storeName,
               remainingPoint: PointUseService.remainingPoint(balance, usePoint),
-              onTimeout: returnToIdle,
             });
-            clearContext();
           },
           onBack: () => {
             // 휴대폰 입력 단계로 복귀 (입력했던 번호 그대로)

@@ -52,57 +52,57 @@ window.ResultPageService = (function () {
 
   /**
    * 적립 완료.
-   * @param {{earnPoint:number, storeName:string, balancePoint:number, onTimeout?:()=>void, timerMs?:number}} args
+   * @param {{earnPoint:number, storeName:string, balancePoint:number, onTimeout?:()=>void, timerMs?:number, buttons?:Array}} args
    */
-  function showEarnSuccess({ earnPoint, storeName, balancePoint, onTimeout, timerMs }) {
+  function showEarnSuccess({ earnPoint, storeName, balancePoint, onTimeout, timerMs, buttons }) {
     return render({
       type:        'image',
       status:      'success',
       title:       `${fmtPoint(earnPoint)}P 적립 완료`,
       description: `${fmtPoint(balancePoint)}P 있어요`,
-      onTimeout, timerMs,
+      onTimeout, timerMs, buttons,
     });
   }
 
   /**
    * 사용 완료.
-   * @param {{usePoint:number, storeName:string, remainingPoint:number, onTimeout?:()=>void, timerMs?:number}} args
+   * @param {{usePoint:number, storeName:string, remainingPoint:number, onTimeout?:()=>void, timerMs?:number, buttons?:Array}} args
    */
-  function showUseSuccess({ usePoint, storeName, remainingPoint, onTimeout, timerMs }) {
+  function showUseSuccess({ usePoint, storeName, remainingPoint, onTimeout, timerMs, buttons }) {
     return render({
       type:        'image',
       status:      'success',
       title:       `${fmtPoint(usePoint)}P 사용완료`,
       description: `${fmtPoint(remainingPoint)}P 남았어요`,
-      onTimeout, timerMs,
+      onTimeout, timerMs, buttons,
     });
   }
 
   /**
    * 포인트 부족. (image:error 타입은 text 필드 미지원 → 잔액은 description 에 포함)
-   * @param {{storeName:string, minPoint:number, balancePoint:number, onTimeout?:()=>void, timerMs?:number}} args
+   * @param {{storeName:string, minPoint:number, balancePoint:number, onTimeout?:()=>void, timerMs?:number, buttons?:Array}} args
    */
-  function showInsufficientPoint({ storeName, minPoint, balancePoint, onTimeout, timerMs }) {
+  function showInsufficientPoint({ storeName, minPoint, balancePoint, onTimeout, timerMs, buttons }) {
     return render({
       type:        'image',
       status:      'error',
       title:       '포인트 부족',
       description: `${storeName} 최소 ${fmtPoint(minPoint)}P부터 사용 가능합니다.\n보유 포인트 ${fmtPoint(balancePoint)}P`,
-      onTimeout, timerMs,
+      onTimeout, timerMs, buttons,
     });
   }
 
   /**
    * 조회 결과.
-   * @param {{storeName:string, balancePoint:number, onTimeout?:()=>void, timerMs?:number}} args
+   * @param {{storeName:string, balancePoint:number, onTimeout?:()=>void, timerMs?:number, buttons?:Array}} args
    */
-  function showLookupResult({ storeName, balancePoint, onTimeout, timerMs }) {
+  function showLookupResult({ storeName, balancePoint, onTimeout, timerMs, buttons }) {
     return render({
       type:        'text',
       text:        `보유 포인트 ${fmtPoint(balancePoint)}P`,
       title:       storeName,
       description: '현재 보유하고 있는 포인트입니다.',
-      onTimeout, timerMs,
+      onTimeout, timerMs, buttons,
     });
   }
 

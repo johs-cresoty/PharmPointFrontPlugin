@@ -24,6 +24,7 @@ const FILES = [
   "src/features/point-earn/point-earn.service.js",
   "src/features/point-use/point-use.service.js",
   "src/features/result-page/result-page.service.js",
+  "src/features/result-page/result-navigator.js",
   "src/features/app-session/app-session.service.js",
   "src/features/app-config/app-config.service.js",
 ];

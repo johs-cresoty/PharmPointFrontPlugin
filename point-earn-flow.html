@@ -171,13 +171,12 @@
         const earnPoint = estimatedPoint || (parseInt(commitResult.data?.pointAmount, 10) || 0);
         const storeName = await getStoreName();
 
-        ResultPageService.showEarnSuccess({
+        clearContext();
+        ResultNavigator.goEarnSuccess({
           earnPoint,
           storeName,
           balancePoint,
-          onTimeout: returnToIdle,
         });
-        clearContext();
       }
 
       // ── entry ───────────────────────────────────────

@@ -66,14 +66,14 @@
           (isMinPointEnabled && minPoint > balance) || balance < 1;
 
         if (insufficient) {
-          ResultPageService.showInsufficientPoint({
+          // Q4: 명시적 캣포스 실패 응답 (Android 는 응답 없음 — 의도적으로 다름)
+          PointUseService.cancelUse({ source: ctx.source });
+          clearContext();
+          ResultNavigator.goInsufficient({
             storeName,
             minPoint,
             balancePoint: balance,
-            onTimeout: returnToIdle,
           });
-          // Q4: 명시적 캣포스 실패 응답 (Android 는 응답 없음 — 의도적으로 다름)
-          PointUseService.cancelUse({ source: ctx.source });
           return;
         }
 
@@ -151,13 +151,12 @@
               usePoint,
             });
 
-            ResultPageService.showUseSuccess({
+            clearContext();
+            ResultNavigator.goUseSuccess({
               usePoint,
               storeName,
               remainingPoint: PointUseService.remainingPoint(balance, usePoint),
-              onTimeout: returnToIdle,
             });
-            clearContext();
           },
           onBack: () => {
             PointUseService.cancelUse({ source: ctx.source });
