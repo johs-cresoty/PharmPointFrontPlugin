@@ -172,8 +172,8 @@ window.TokenStorage = (function () {
  * AuthService — 팜포인트 인증 API 호출 (enroll / token 갱신).
  *
  * 엔드포인트:
- *   - POST /api/v1/point/auth/enroll  : 최초 기기 등록. password 필드 없이 SDK 3값으로 등록.
- *   - POST /api/v1/point/auth/token   : refreshToken 으로 access token 재발급.
+ *   - POST /api/v1/point/auth/enroll  : 최초 기기 등록. body { businessRegistrationNumber, serialNumber }
+ *   - POST /api/v1/point/auth/token   : refreshToken 으로 재발급. body { businessRegistrationNumber, serialNumber, refreshToken }
  *
  * 응답: { token, refreshToken } → TokenStorage 에 저장.
  *
@@ -197,15 +197,14 @@ window.AuthService = (function () {
   }
 
   /**
-   * 최초 기기 등록. SDK 3값으로 호출 (password 없이).
+   * 최초 기기 등록. { businessRegistrationNumber, serialNumber } 로 호출.
    * 성공 시 token / refreshToken 저장 후 token 반환.
    */
   async function enroll() {
     await ApiConfig.ensureInit();
     const data = await postJson(ENROLL_PATH, {
       businessRegistrationNumber: ApiConfig.businessNumber,
-      tossPlaceSerialNumber:      ApiConfig.serialNumber,
-      tossPlaceMerchantId:        ApiConfig.merchantId,
+      serialNumber:               ApiConfig.serialNumber,
     });
     const token        = data.token        ?? '';
     const refreshToken = data.refreshToken ?? '';
@@ -229,8 +228,7 @@ window.AuthService = (function () {
     }
     const data = await postJson(REFRESH_PATH, {
       businessRegistrationNumber: ApiConfig.businessNumber,
-      tossPlaceSerialNumber:      ApiConfig.serialNumber,
-      tossPlaceMerchantId:        ApiConfig.merchantId,
+      serialNumber:               ApiConfig.serialNumber,
       refreshToken,
     });
     const newToken        = data.token        ?? '';
