@@ -1,2 +1,10 @@
 CLAUDE.md
 .claude/
+
+# node / vite
+node_modules/
+dist/
+.vite/
+
+# tsc
+*.tsbuildinfo

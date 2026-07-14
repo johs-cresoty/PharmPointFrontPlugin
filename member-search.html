@@ -87,7 +87,8 @@
     }
 
     async function init() {
-      await ApiConfig.ensureInit();
+      // 페이지 전환 시 웹소켓 서버 재시작 (default handlers = 새 CAT 이벤트 오면 홈 복귀)
+      await PluginBootstrap.init();
 
       let storeName = '';
       try {

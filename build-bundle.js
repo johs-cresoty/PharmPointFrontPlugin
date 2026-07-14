@@ -27,6 +27,7 @@ const FILES = [
   "src/features/result-page/result-navigator.js",
   "src/features/app-session/app-session.service.js",
   "src/features/app-config/app-config.service.js",
+  "src/app/plugin-bootstrap.service.js",
 ];
 
 const chunks = [];

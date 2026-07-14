@@ -1,31 +1,23 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link
-      rel="stylesheet"
-      href="https://static.toss.im/tds/43.9.4/css/tds.min.css"
-    />
-    <link
-      rel="stylesheet"
-      type="text/css"
-      href="https://static.toss.im/tps/main.css"
-    />
-    <link
-      rel="stylesheet"
-      type="text/css"
-      href="https://static.toss.im/tps/others.css"
-    />
-    <link rel="stylesheet" type="text/css" href="./global.css" />
+
+    <!-- Toss Place 디자인 시스템 스타일 -->
+    <link rel="stylesheet" href="https://static.toss.im/tds/43.9.4/css/tds.min.css" />
+    <link rel="stylesheet" href="https://static.toss.im/tps/main.css" />
+    <link rel="stylesheet" href="https://static.toss.im/tps/others.css" />
+    <link rel="stylesheet" href="/global.css" />
+
+    <!-- Toss Front SDK (window.sdk) — 각 React 컴포넌트에서 참조 -->
     <script src="https://cdn.tossplace.com/toss-front-sdk/v0/index.js"></script>
-    <script src="./sdk.js"></script>
-    <title>Order Example - Toss Front SDK</title>
+    <script src="/sdk.js"></script>
+
+    <title>PharmPoint Plugin</title>
   </head>
   <body>
-    <div id="app"></div>
-    <script>
-      location.href = "./home.html";
-    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

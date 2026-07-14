@@ -253,21 +253,17 @@
       location.href = './point-earn-flow.html';
     }
 
-    (async () => {
-      // ApiConfig 초기화 (sdk.app.getMerchant로 taxNo 설정 완료까지 대기)
-      await ApiConfig.ensureInit();
-
-      AppSession.start({
-        onNavigateToSavePoint:  (args) => { startEarnPointFlow(args); },
-        onNavigateToLookup:     (args) => { startUsePointFlow(args); },
-        onNavigateToUsePoint:   (args) => { startUseWithCustomerFlow(args); },
-        onNavigateToCatRequest: (args) => {
-          if      (args.mode === 'CAT_REQUEST_NUM')      renderPhoneInput();
-          else if (args.mode === 'CAT_REQUEST_CUSTOMER') renderCustomerLookup();
-        },
-        onCatDisconnect: () => { renderIdle(); },
-      });
-    })();
+    // 페이지 전환 시 웹소켓 서버가 죽어 캣포스 연결이 끊기므로 공통 부트스트랩으로 재시작.
+    PluginBootstrap.init({
+      onNavigateToSavePoint:  (args) => { startEarnPointFlow(args); },
+      onNavigateToLookup:     (args) => { startUsePointFlow(args); },
+      onNavigateToUsePoint:   (args) => { startUseWithCustomerFlow(args); },
+      onNavigateToCatRequest: (args) => {
+        if      (args.mode === 'CAT_REQUEST_NUM')      renderPhoneInput();
+        else if (args.mode === 'CAT_REQUEST_CUSTOMER') renderCustomerLookup();
+      },
+      onCatDisconnect: () => { renderIdle(); },
+    });
 
     renderIdle();
 

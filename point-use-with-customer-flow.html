@@ -179,7 +179,8 @@
 
       // ── entry ───────────────────────────────────────
       (async () => {
-        await ApiConfig.ensureInit();
+        // 페이지 전환 시 웹소켓 서버 재시작 (default handlers = 새 CAT 이벤트 오면 홈 복귀)
+        await PluginBootstrap.init();
         const ctx = loadContext();
         if (!ctx) {
           // 직접 진입 — 홈으로 복귀

@@ -21,6 +21,9 @@
       //   onTimeoutHref: 타이머 종료 시 이동 경로 (기본 ./home.html)
       // 컨텍스트는 ResultNavigator 로 세팅되고 여기서 소비된다.
 
+      // 페이지 전환 시 웹소켓 서버 재시작 (결과 화면 노출 중에도 캣포스 연결 유지 필요)
+      PluginBootstrap.init();
+
       const ctx = ResultNavigator.readContext();
       const goHome   = () => { location.href = ctx?.onTimeoutHref || './home.html'; };
       const goSearch = () => { location.href = './member-search.html'; };
