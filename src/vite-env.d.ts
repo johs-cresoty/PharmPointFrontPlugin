@@ -30,10 +30,90 @@ interface TossWebSocketApi {
   close(opts: { serverId: string }): Promise<void>;
 }
 
+interface TossAppApi {
+  getSerialNumber(): Promise<string | { serialNumber?: string; serial?: string; id?: string; value?: string }>;
+  getMerchant(): Promise<{ id?: string; businessNumber?: string; name?: string }>;
+}
+
+interface TossStorageApi {
+  get(opts:    { key: string }):                 Promise<{ key: string; value: string | null }>;
+  set(opts:    { key: string; value: string }):  Promise<void>;
+  remove(opts: { key: string }):                 Promise<void>;
+}
+
+interface TossResultPageButton {
+  label:         string;
+  closeOnClick?: boolean;
+  onClick:       () => void;
+}
+
+interface TossResultPageOptions {
+  type:         "text" | "image";
+  status?:      "success" | "error";
+  title?:       string;
+  description?: string;
+  text?:        string;
+  timerMs?:     number;
+  buttons?:     TossResultPageButton[];
+  onTimeout?:   () => void;
+  localeCode?:  string;
+}
+
+interface TossInputPageOptions {
+  type:    "text" | "number" | "phone" | "identification";
+  top:     { title: string; subtitle?: string };
+  input:   {
+    placeholder?: string;
+    onChange?: (value: string) => void;
+    maxLength?: number;
+    type?: string;
+  };
+  button?:      { label: string };
+  disclaimer?:  string;
+  onSubmit:     (value: string) => void;
+  onBack?:      () => void;
+}
+
+interface TossKeypadInputPageOptions {
+  title?:       string;
+  description?: string;
+  input: {
+    type?:        "phone" | "number" | string;
+    trigger?:     "button" | "length";
+    length?:      number;
+    button?:      { label: string };
+    placeholder?: string;
+    onSubmit:     (value: string) => void | Promise<void>;
+  };
+  onBack?:       () => void;
+  navbarButton?: unknown;
+}
+
+interface TossIdlePageOptions {
+  [key: string]: unknown;
+}
+
+interface TossToastOptions {
+  message: string;
+  icon?:   "success" | "error";
+}
+
+interface TossTemplateApi {
+  renderResultPage(opts:      TossResultPageOptions): void;
+  renderInputPage(opts:       TossInputPageOptions): void;
+  renderKeypadInputPage(opts: TossKeypadInputPageOptions): void;
+  renderIdlePage(opts?:       TossIdlePageOptions): void;
+  openToast(opts:             TossToastOptions): void;
+  [key: string]: unknown;
+}
+
 interface TossSdk {
+  app:       TossAppApi;
   serial:    TossSerialApi;
   websocket: TossWebSocketApi;
-  // 다른 영역 (template / app / payment / storage 등) 은 Phase 3 에서 확장
+  storage:   TossStorageApi;
+  template:  TossTemplateApi;
+  // 다른 영역 (payment 등) 은 Phase 3 에서 확장
   [key: string]: unknown;
 }
 

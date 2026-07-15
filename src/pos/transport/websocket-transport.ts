@@ -52,22 +52,22 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
   }
 
   async function start(): Promise<void> {
-    if (state.handle) return;
+    if (state.handle) { console.log("[WS] start 스킵 — 이미 handle 있음"); return; }
 
-    // 이전 세션에서 남은 고아 서버 정리 (동일 serverId/port).
+    // 이전 세션에서 남은 고아 서버 정리 (전부 close — serverId/port 불일치도 무조건).
     try {
-      const { servers } = await sdk.websocket.list();
-      for (const s of servers) {
-        if (s.serverId === cfg.wsServerId || s.port === cfg.port) {
-          console.log("[WS] 이전 서버 정리 serverId=" + s.serverId);
-          await sdk.websocket.close({ serverId: s.serverId });
-        }
+      const listRes = await sdk.websocket.list();
+      console.log("[WS] list() 결과 servers.length=" + (listRes?.servers?.length ?? 0) + " raw=" + JSON.stringify(listRes));
+      for (const s of listRes.servers ?? []) {
+        console.log("[WS] 이전 서버 close serverId=" + s.serverId + " port=" + s.port);
+        try { await sdk.websocket.close({ serverId: s.serverId }); }
+        catch (e) { console.warn("[WS] close 실패 serverId=" + s.serverId, e); }
       }
     } catch (e) {
       console.warn("[WS] 서버 목록 정리 실패", e);
     }
 
-    console.log("[WS] 서버 시작 port=" + cfg.port);
+    console.log("[WS] 서버 시작 port=" + cfg.port + " serverId=" + cfg.wsServerId);
     state.handle = await sdk.websocket.start({
       serverId: state.serverId,
       port:     cfg.port,

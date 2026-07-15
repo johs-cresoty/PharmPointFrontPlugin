@@ -54,9 +54,15 @@ export function ackCustomerInfo(phone: string, customerCode: string): string {
   return makeJson(C.CATPOS_CUSTOMER_REGISTER_ACK, { phone, customerCode });
 }
 
-/** FAIL : { message } — 사용자 취소 등 */
-export function fail(): string {
-  return makeJson(C.CATPOS_FAIL, { message: "다음에하기" });
+/**
+ * FAIL : { message } — 실패 응답. 메시지 미지정 시 기본값 "다음에하기".
+ * 상황별로 다른 메시지 사용:
+ *   - "포인트가 부족합니다"    : 포인트 부족 결과 화면으로 이어질 때
+ *   - "입력을 취소하였습니다." : 뒤로가기 버튼으로 취소
+ *   - 그 외 (서버 에러 등)      : "다음에하기" 기본값
+ */
+export function fail(message = "다음에하기"): string {
+  return makeJson(C.CATPOS_FAIL, { message });
 }
 
 /** USE_POINT_ACK : { customerCode, balance, usePoint } */
