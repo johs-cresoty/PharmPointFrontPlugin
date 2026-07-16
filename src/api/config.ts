@@ -95,11 +95,6 @@ export function ensureInit(): Promise<void> {
       _merchantId     = String(merchant?.id ?? "");
       _businessNumber = String(merchant?.businessNumber ?? "");
 
-      console.log("[ApiConfig] Toss SDK 값 로드 완료");
-      console.log("  - serialNumber:",   _serialNumber);
-      console.log("  - merchantId:",     _merchantId);
-      console.log("  - businessNumber:", _businessNumber);
-
       if (!_serialNumber) {
         console.warn("[ApiConfig] ⚠️ serialNumber 를 추출하지 못했습니다. raw 값 확인 필요");
       }

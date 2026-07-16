@@ -40,7 +40,6 @@ async function getStoreName(): Promise<string> {
 export async function renderPointEarnFlow(): Promise<void> {
   const ctx = loadContext();
   if (!ctx) { returnToIdle(); return; }
-  console.log("[earn-flow] enter, source=" + ctx.source);
 
   const payAmount = parseInt(String(ctx.transactionData.payAmount ?? "0"), 10) || 0;
 

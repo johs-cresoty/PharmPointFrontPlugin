@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Toss Place 디자인 시스템 스타일 -->
+    <link rel="stylesheet" href="https://static.toss.im/tds/43.9.4/css/tds.min.css" />
+    <link rel="stylesheet" href="https://static.toss.im/tps/main.css" />
+    <link rel="stylesheet" href="https://static.toss.im/tps/others.css" />
+    <link rel="stylesheet" href="/global.css" />
+
+    <!-- Toss Front SDK -->
+    <script src="https://cdn.tossplace.com/toss-front-sdk/v0/index.js"></script>
+    <script src="/sdk.js"></script>
+
+    <title>PharmPoint 설정</title>
+
+    <!--
+      Toss 관리자 '팜포인트 → 플러그인 설정' 진입점.
+      리다이렉트가 아니라 SPA 를 직접 부팅하되, 라우터가 첫 렌더에 설정 화면을 그리도록
+      hash 를 사전 세팅. (리다이렉트 방식은 Toss 웹뷰에서 ERR_NAME_NOT_RESOLVED 발생)
+    -->
+    <script>
+      if (!location.hash) location.hash = "#/settings";
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/index.js"></script>
+  </body>
+</html>

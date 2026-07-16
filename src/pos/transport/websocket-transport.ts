@@ -52,14 +52,14 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
   }
 
   async function start(): Promise<void> {
-    if (state.handle) { console.log("[WS] start 스킵 — 이미 handle 있음"); return; }
+    if (state.handle) return;
 
-    // 이전 세션에서 남은 고아 서버 정리 (전부 close — serverId/port 불일치도 무조건).
+    // 이전 세션에서 남은 고아 서버 정리 — 우리 serverId 또는 우리 port 와 일치하는 것만.
+    // (Toss 내부 서비스(로그 서버 등)까지 close 하면 개발자 도구가 죽음)
     try {
       const listRes = await sdk.websocket.list();
-      console.log("[WS] list() 결과 servers.length=" + (listRes?.servers?.length ?? 0) + " raw=" + JSON.stringify(listRes));
       for (const s of listRes.servers ?? []) {
-        console.log("[WS] 이전 서버 close serverId=" + s.serverId + " port=" + s.port);
+        if (s.serverId !== cfg.wsServerId && s.port !== cfg.port) continue;
         try { await sdk.websocket.close({ serverId: s.serverId }); }
         catch (e) { console.warn("[WS] close 실패 serverId=" + s.serverId, e); }
       }
@@ -67,7 +67,6 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
       console.warn("[WS] 서버 목록 정리 실패", e);
     }
 
-    console.log("[WS] 서버 시작 port=" + cfg.port + " serverId=" + cfg.wsServerId);
     state.handle = await sdk.websocket.start({
       serverId: state.serverId,
       port:     cfg.port,
@@ -75,7 +74,6 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
 
       onConnection: ({ connectionId }) => {
         state.connectionId = connectionId;
-        console.log("[WS] 연결됨 connectionId=" + connectionId);
       },
 
       onMessage: ({ connectionId, data }) => {
@@ -87,7 +85,6 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
       },
 
       onDisconnection: ({ connectionId }) => {
-        console.log("[WS] 연결 해제 connectionId=" + connectionId);
         if (state.connectionId === connectionId) state.connectionId = null;
       },
 
@@ -96,12 +93,10 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
         onError?.(payload);
       },
     });
-    console.log("[WS] 서버 시작 완료");
   }
 
   async function stop(): Promise<void> {
     if (!state.handle) return;
-    console.log("[WS] 서버 중지");
     try {
       await state.handle.stop?.();
     } finally {

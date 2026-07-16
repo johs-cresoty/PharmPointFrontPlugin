@@ -33,36 +33,30 @@ apiClient.interceptors.request.use(async (config) => {
   if (token) {
     config.headers.set("Authorization", `Bearer ${token}`);
   }
-  // Raw payload 로그 — 서버 "필수값 없음" 등 진단용
+  // 요청 로그 — 진단용 (URL / params / body)
   const method = (config.method ?? "get").toUpperCase();
   const url    = `${config.baseURL ?? ""}${config.url ?? ""}`;
   const params = config.params ? ` params=${JSON.stringify(config.params)}` : "";
   const body   = config.data   ? ` body=${JSON.stringify(config.data)}`     : "";
-  const authHeader = config.headers.get("Authorization");
-  const authInfo = typeof authHeader === "string"
-    ? ` auth=${authHeader.slice(0, 14)}...${authHeader.slice(-6)}`
-    : " auth=NONE";
-  console.log(`[HTTP] → ${method} ${url}${authInfo}${params}${body}`);
+  console.log(`[HTTP] → ${method} ${url}${params}${body}`);
   return config;
 });
 
-// ── 응답 인터셉터: 401 자동 재발급 + 로그 ─────
+// ── 응답 인터셉터: 401 자동 재발급 + 응답 로그 ─────
 apiClient.interceptors.response.use(
   (res) => {
     const method = (res.config.method ?? "get").toUpperCase();
     const url    = `${res.config.baseURL ?? ""}${res.config.url ?? ""}`;
-    const rh = JSON.stringify(res.headers ?? {});
-    console.log(`[HTTP] ← ${res.status} ${method} ${url} respHeaders=${rh} body=${JSON.stringify(res.data)}`);
+    console.log(`[HTTP] ← ${res.status} ${method} ${url} body=${JSON.stringify(res.data)}`);
     return res;
   },
   async (error: AxiosError) => {
     if (error.response) {
       const method = (error.response.config.method ?? "get").toUpperCase();
       const url    = `${error.response.config.baseURL ?? ""}${error.response.config.url ?? ""}`;
-      const rh = JSON.stringify(error.response.headers ?? {});
-      console.log(`[HTTP] ← ${error.response.status} ${method} ${url} respHeaders=${rh} body=${JSON.stringify(error.response.data)}`);
+      console.warn(`[HTTP] ← ${error.response.status} ${method} ${url} body=${JSON.stringify(error.response.data)}`);
     } else {
-      console.log(`[HTTP] ← NETWORK ERROR msg=${error.message} code=${error.code}`);
+      console.warn(`[HTTP] ← NETWORK ERROR msg=${error.message} code=${error.code}`);
     }
     const original = error.config as RetryableConfig | undefined;
     if (!original) throw error;

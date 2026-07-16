@@ -98,11 +98,21 @@ interface TossToastOptions {
   icon?:   "success" | "error";
 }
 
+interface TossSelectGridPageOptions {
+  title:    string;
+  subtitle?: string;
+  options:  Array<{ id: string; title: string; onClick: () => void }>;
+  onBack?:  () => void;
+  navbarButton?: unknown;
+  [key: string]: unknown;
+}
+
 interface TossTemplateApi {
   renderResultPage(opts:      TossResultPageOptions): void;
   renderInputPage(opts:       TossInputPageOptions): void;
   renderKeypadInputPage(opts: TossKeypadInputPageOptions): void;
   renderIdlePage(opts?:       TossIdlePageOptions): void;
+  renderSelectGridPage(opts:  TossSelectGridPageOptions): void;
   openToast(opts:             TossToastOptions): void;
   [key: string]: unknown;
 }

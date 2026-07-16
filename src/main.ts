@@ -32,10 +32,19 @@ register({ path: "/settings",                     render: renderSettings });
 
 // ─── 부트스트랩 ──────────────────────────────
 
+/**
+ * settings.html 로 진입한 경우인지 판별.
+ * 설정 화면만 표시하는 페이지에서는 CATPOS WebSocket 서버를 시작하지 않는다.
+ * — WS 시작·정리 사이클이 Toss 로그 서비스 등 내부 서비스에 영향 줄 수 있음.
+ * — 설정 화면 자체는 CATPOS 통신이 필요 없음.
+ */
+function isSettingsEntry(): boolean {
+  return location.pathname.endsWith("/settings.html");
+}
+
 async function bootstrap(): Promise<void> {
-  const bootCount = parseInt(localStorage.getItem("pharm_boot_count") || "0", 10) + 1;
-  localStorage.setItem("pharm_boot_count", String(bootCount));
-  console.log("[bootstrap] module loaded, cumulative bootCount=" + bootCount);
+  // 진단: Toss 관리자가 실제로 어떤 URL 로 진입하는지 확인 (settings.html vs 다른 경로)
+  console.log(`[main] entry pathname=${location.pathname} hash=${location.hash}`);
 
   await ensureInit();
 
@@ -44,6 +53,12 @@ async function bootstrap(): Promise<void> {
     setAppConfig({ minPoint: cfg.minPoint, isMinPointEnabled: cfg.isMinPointEnabled });
   } catch (e) {
     console.warn("[main] 앱 설정 로드 실패", e);
+  }
+
+  if (isSettingsEntry()) {
+    // 설정 진입점 — 라우터만 시작. WebSocket / AppSession 미기동.
+    startRouter();
+    return;
   }
 
   // 소켓 세션 — 앱 lifecycle 하나에 1회. 라우터 이동해도 유지.
@@ -76,7 +91,7 @@ async function bootstrap(): Promise<void> {
 
   startRouter();
 
-  // 앱 종료 시 소켓 세션 정리
+  // 앱 종료 시 소켓 세션 정리 (원본 다중페이지 코드와 동일 흐름 유지)
   window.addEventListener("beforeunload", () => { void stopAppSession(); });
 }
 

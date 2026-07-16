@@ -149,7 +149,6 @@ export function start(handlers: AppSessionHandlers = {}): void {
   });
 
   reg(E.CatEarnPointSingle, (payload) => {
-    console.log("[app-session] CatEarnPointSingle received");
     const { data } = payload as CatEventPayload;
     const td = parseCatSingle(data);
     handlers.onNavigateToSavePoint?.({
@@ -158,7 +157,6 @@ export function start(handlers: AppSessionHandlers = {}): void {
   });
 
   reg(E.CatEarnPointComplex, (payload) => {
-    console.log("[app-session] CatEarnPointComplex received");
     const { data } = payload as CatEventPayload;
     const td = parseCatComplex(data);
     handlers.onNavigateToSavePoint?.({

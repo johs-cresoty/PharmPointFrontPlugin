@@ -4,7 +4,8 @@
  * 특수 진입 (CAT_REQUEST_NUM / CAT_REQUEST_CUSTOMER) 은 sessionStorage 로 신호받아
  * phone/customer 입력 서브뷰로 전환.
  */
-import { getShowStoreName } from "../features/app-config/app-config.service";
+import { getPointUseConfig, getShowStoreName } from "../features/app-config/app-config.service";
+import { setConfig as setAppSessionConfig } from "../features/app-session/app-session.service";
 import { getPointBalance } from "../features/point-inquiry/point-inquiry.service";
 import { SocketGateway } from "../pos/socket-gateway";
 import { navigate, onCleanup } from "../router";
@@ -60,11 +61,33 @@ async function renderIdle(): Promise<void> {
     type:   "oneButton",
     button: {
       text:    "포인트 조회",
-      onClick: () => { navigate("/member-search"); },
+      onClick: () => {
+        // 화면 전환 중 SDK 가 버튼을 잠시 중앙으로 재배치하는 잔상 감춤.
+        const app = document.getElementById("app");
+        if (app) {
+          app.style.transition = "opacity 0.15s ease-out";
+          app.style.opacity    = "0";
+        }
+        navigate("/member-search");
+      },
     },
   } as never);
 
-  // 매장명 조회 후 표시 (미노출 설정이면 hide)
+  await syncIdleConfig();
+}
+
+/**
+ * 대기화면 관련 설정 재조회 & 반영.
+ * Toss 웹뷰는 관리자 설정 화면 → 대기화면 복귀 시 webview 컨텍스트를 살려둔 채 돌아오므로
+ * 라우터 render 함수가 재실행되지 않음. visibilitychange/pageshow 시점에 이 함수를 다시 호출해
+ * 설정 변경 사항이 즉각 반영되게 한다.
+ */
+async function syncIdleConfig(): Promise<void> {
+  try {
+    const cfg = await getPointUseConfig();
+    setAppSessionConfig({ minPoint: cfg.minPoint, isMinPointEnabled: cfg.isMinPointEnabled });
+  } catch (e) { console.warn("[Home] config sync fail", e); }
+
   const [showStoreName, storeName] = await loadStoreNameConfig();
   if (showStoreName && storeName) showStoreNameOverlay(storeName);
   else                            hideStoreNameOverlay();
@@ -167,7 +190,16 @@ export function renderHome(): void {
   else if (mode === "CAT_REQUEST_CUSTOMER") renderCustomerLookup();
   else                                       void renderIdle();
 
+  const onVisibility = (): void => {
+    if (document.visibilityState === "visible") void syncIdleConfig();
+  };
+  const onPageShow = (): void => { void syncIdleConfig(); };
+  document.addEventListener("visibilitychange", onVisibility);
+  window.addEventListener("pageshow", onPageShow);
+
   onCleanup(() => {
+    document.removeEventListener("visibilitychange", onVisibility);
+    window.removeEventListener("pageshow", onPageShow);
     overlay?.remove();
     overlay = null;
     removeStoreNameOverlay();

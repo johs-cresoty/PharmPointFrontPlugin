@@ -44,6 +44,8 @@ function triggerSubmit(agreementEl: HTMLInputElement): void {
 export async function renderMemberSearch(): Promise<void> {
   currentPhone = "";
 
+  const app = document.getElementById("app");
+
   let storeName = "";
   try {
     const merchant = await sdk.app.getMerchant();
@@ -68,5 +70,17 @@ export async function renderMemberSearch(): Promise<void> {
   overlay.backBtnEl.addEventListener("click",    () => { navigate("/"); });
   overlay.confirmBtnEl.addEventListener("click", () => { triggerSubmit(overlay.agreementEl); });
 
-  onCleanup(() => { overlay.remove(); });
+  // 대기화면에서 opacity 0 으로 페이드아웃 후 진입한 경우 다시 페이드인.
+  if (app) {
+    // 한 프레임 뒤에 opacity 복원 → 새 페이지 레이아웃 완성 후 자연스럽게 나타남
+    requestAnimationFrame(() => {
+      app.style.transition = "opacity 0.2s ease-in";
+      app.style.opacity    = "1";
+    });
+  }
+
+  onCleanup(() => {
+    overlay.remove();
+    if (app) app.style.opacity = "1";
+  });
 }
