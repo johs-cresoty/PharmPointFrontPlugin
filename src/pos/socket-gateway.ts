@@ -72,6 +72,7 @@ function mapCatCommandToEvent(cmd: string): SocketEventType | null {
     case C.CATPOS_EARN_MULTI_REQ:               return SocketEvent.CatEarnPointComplex;
     case C.CATPOS_USE_POINT_REQ:                return SocketEvent.CatUsePointNoCustomer;
     case C.CATPOS_USE_POINT_WITH_CUSTOMER_REQ:  return SocketEvent.CatUsePointWithCustomer;
+    case C.CATPOS_MARKETING_CONSENT_REQ:        return SocketEvent.CatMarketingConsent;
     default: return null;
   }
 }
@@ -168,6 +169,9 @@ function create() {
   function sendCATUsePointWithCustomerResult(usePoint: string | number): Promise<void> {
     return sendCAT(CatposCodec.ackUsePointWithCustomer(usePoint));
   }
+  function sendCATMarketingConsent(phone: string, marketingConsent: boolean): Promise<void> {
+    return sendCAT(CatposCodec.ackMarketingConsent(phone, marketingConsent));
+  }
 
   // ── 단말기(TRM) 응답 송신 ───────────────────
 
@@ -190,7 +194,7 @@ function create() {
     start, stop, on,
     // CAT
     sendCATOk, sendCATPhoneNumber, sendCATCustomerInfo, sendCATFail,
-    sendCATUsePointResult, sendCATUsePointWithCustomerResult,
+    sendCATUsePointResult, sendCATUsePointWithCustomerResult, sendCATMarketingConsent,
     // TRM
     sendTerminalUsePoint, sendTerminalInit,
     // CAT session 상태 (read-only)

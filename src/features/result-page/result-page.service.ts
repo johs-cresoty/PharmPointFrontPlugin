@@ -66,6 +66,18 @@ function customerPrefix(customerName?: string): string {
 
 // ─── 공개 API ─────────────────────────────────
 
+/** 단순 완료 안내 (마케팅 동의 입력 완료 등) — 성공 아이콘 + "입력 완료 / 감사합니다". */
+export function showMarketingConsentDone(args: {
+  onTimeout?: () => void; timerMs?: number;
+}): Promise<void> {
+  return render({
+    type: "image", status: "success",
+    title:       "입력 완료",
+    description: "감사합니다",
+    onTimeout: args.onTimeout, timerMs: args.timerMs,
+  });
+}
+
 export function showEarnSuccess(args: {
   earnPoint: number; storeName: string; balancePoint: number;
   customerName?: string; onTimeout?: () => void; timerMs?: number; buttons?: ResultButton[];

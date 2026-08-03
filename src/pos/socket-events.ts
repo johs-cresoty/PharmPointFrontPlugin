@@ -20,6 +20,7 @@ export const SocketEvent = {
   CatEarnPointComplex:     "CAT_EARN_POINT_COMPLEX",        // EARN_MULTI_REQ
   CatUsePointNoCustomer:   "CAT_USE_POINT_NO_CUSTOMER",     // USE_POINT_REQ
   CatUsePointWithCustomer: "CAT_USE_POINT_WITH_CUSTOMER",   // USE_POINT_WITH_CUSTOMER_REQ
+  CatMarketingConsent:     "CAT_MARKETING_CONSENT",         // MARKETING_CONSENT_REQ
 } as const;
 
 export type SocketEventType = typeof SocketEvent[keyof typeof SocketEvent];

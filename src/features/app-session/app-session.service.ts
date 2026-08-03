@@ -45,7 +45,7 @@ export type NavigateUsePointArgs = {
 };
 
 export type NavigateCatRequestArgs = {
-  mode: "CAT_REQUEST_NUM" | "CAT_REQUEST_CUSTOMER";
+  mode: "CAT_REQUEST_NUM" | "CAT_REQUEST_CUSTOMER" | "CAT_MARKETING_CONSENT";
 };
 
 export type AppSessionHandlers = {
@@ -142,6 +142,10 @@ export function start(handlers: AppSessionHandlers = {}): void {
 
   reg(E.CatRequestCustomer, () => {
     handlers.onNavigateToCatRequest?.({ mode: "CAT_REQUEST_CUSTOMER" });
+  });
+
+  reg(E.CatMarketingConsent, () => {
+    handlers.onNavigateToCatRequest?.({ mode: "CAT_MARKETING_CONSENT" });
   });
 
   reg(E.CatDisconnect, () => {

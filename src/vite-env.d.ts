@@ -107,12 +107,34 @@ interface TossSelectGridPageOptions {
   [key: string]: unknown;
 }
 
+// 약관 동의 템플릿 (renderAgreementPage). CDN 번들 시그니처 기반 최소 타입.
+// 항목: { id, title, href? }. onSubmit 은 '동의된 id 배열'(필수 전부 + 체크된 선택)을 넘긴다.
+interface TossAgreementItem {
+  id:     string;
+  title:  string;
+  href?:  string;
+  [key: string]: unknown;
+}
+
+interface TossAgreementPageOptions {
+  title?:    string;
+  subtitle?: string;
+  agreements: {
+    required: TossAgreementItem[];
+    optional: TossAgreementItem[];
+  };
+  onSubmit:      (agreedIds: string[]) => void;
+  onBack?:       () => void;
+  navbarButton?: unknown;
+}
+
 interface TossTemplateApi {
   renderResultPage(opts:      TossResultPageOptions): void;
   renderInputPage(opts:       TossInputPageOptions): void;
   renderKeypadInputPage(opts: TossKeypadInputPageOptions): void;
   renderIdlePage(opts?:       TossIdlePageOptions): void;
   renderSelectGridPage(opts:  TossSelectGridPageOptions): void;
+  renderAgreementPage(opts:   TossAgreementPageOptions): void;
   openToast(opts:             TossToastOptions): void;
   [key: string]: unknown;
 }

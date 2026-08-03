@@ -78,3 +78,8 @@ export function ackUsePointResult(
 export function ackUsePointWithCustomer(usePoint: string | number): string {
   return makeJson(C.CATPOS_USE_POINT_WITH_CUSTOMER_ACK, { usePoint });
 }
+
+/** MARKETING_CONSENT_ACK : { phone, marketingConsent } — 입력 번호 + 선택(마케팅) 동의 여부 */
+export function ackMarketingConsent(phone: string, marketingConsent: boolean): string {
+  return makeJson(C.CATPOS_MARKETING_CONSENT_ACK, { phone, marketingConsent });
+}

@@ -27,11 +27,13 @@ export function mountPhoneOverlay(opts: {
   hint?:      string;
   storeName?: string;
   appMode?:  "always-overlay" | "phone-overlay-on";
+  agreement?: boolean; // 개인정보 동의 체크박스 표시 (기본 true)
 }): PhoneOverlayHandles {
   const {
     hint      = "휴대폰 번호 입력하고 포인트 받아가세요.",
     storeName = "",
     appMode   = "always-overlay",
+    agreement: showAgreement = true,
   } = opts;
 
   const header = document.createElement("header");
@@ -45,10 +47,12 @@ export function mountPhoneOverlay(opts: {
   const footer = document.createElement("footer");
   footer.className = "overlay-bottom";
   footer.innerHTML = `
+    ${showAgreement ? `
     <label class="footer-agreement">
       <input type="checkbox" data-role="agreement" checked />
       <span>[필수] 개인정보 제공 동의합니다.</span>
     </label>
+    ` : ""}
     <button class="footer-confirm" data-role="confirm" type="button">확인</button>
   `;
 
@@ -56,19 +60,22 @@ export function mountPhoneOverlay(opts: {
   document.body.appendChild(footer);
   document.getElementById("app")?.classList.add(appMode);
 
-  const agreement  = footer.querySelector('[data-role="agreement"]')  as HTMLInputElement;
+  const agreement  = footer.querySelector('[data-role="agreement"]')  as HTMLInputElement | null;
   const confirmBtn = footer.querySelector('[data-role="confirm"]')    as HTMLButtonElement;
   const backBtn    = header.querySelector('[data-role="back"]')       as HTMLButtonElement;
 
-  const syncBtn = () => { confirmBtn.disabled = !agreement.checked; };
-  agreement.addEventListener("change", syncBtn);
-  syncBtn();
+  if (agreement) {
+    const syncBtn = () => { confirmBtn.disabled = !agreement.checked; };
+    agreement.addEventListener("change", syncBtn);
+    syncBtn();
+  }
 
   return {
     root:         header,
     headerEl:     header,
     footerEl:     footer,
-    agreementEl:  agreement,
+    // 체크박스 없을 땐 항상 동의된 것으로 취급 (공용 triggerPhoneSubmit 호환)
+    agreementEl:  agreement ?? ({ checked: true } as HTMLInputElement),
     confirmBtnEl: confirmBtn,
     backBtnEl:    backBtn,
     remove(): void {
