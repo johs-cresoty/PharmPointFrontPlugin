@@ -11,6 +11,7 @@ import { showMarketingConsentDone } from "../features/result-page/result-page.se
 import { SocketGateway } from "../pos/socket-gateway";
 import { navigate, onCleanup } from "../router";
 import { mountPhoneOverlay, type PhoneOverlayHandles } from "./overlays";
+import { startInactivityTimeout } from "../features/inactivity/inactivity-timeout";
 
 const CAT_REQ_KEY = "pharm_cat_request_mode";
 
@@ -20,6 +21,26 @@ let currentPhone = "";
 // 대기화면 활성 여부. 매장명 오버레이는 대기화면일 때만 표시 — 입력/약관 서브뷰에선 숨김.
 // (pageshow/visibilitychange 시 syncIdleConfig 가 매장명을 다시 그리는 걸 막는다.)
 let idleActive = false;
+
+// 무동작 타임아웃 — 입력/약관 서브뷰에서만 활성. 대기화면·결과화면엔 없음.
+let stopTimeout: (() => void) | null = null;
+
+// 입력 서브뷰 진입 시 타이머 시작(기존 것 정리 후). 타임아웃 = 뒤로가기와 동일(CAT 취소 + 대기화면).
+function armTimeout(): void {
+  disarmTimeout();
+  stopTimeout = startInactivityTimeout({
+    onTimeout: () => {
+      stopTimeout = null;
+      SocketGateway.sendCATFail("입력을 취소하였습니다.");
+      void renderIdle();
+    },
+  });
+}
+
+function disarmTimeout(): void {
+  stopTimeout?.();
+  stopTimeout = null;
+}
 
 // ─── 매장명 오버레이 (renderIdlePage 위에 얹음) ───
 
@@ -58,6 +79,7 @@ function removeStoreNameOverlay(): void {
 // ─── 대기화면 렌더 ─────────────────────────
 
 async function renderIdle(): Promise<void> {
+  disarmTimeout(); // 대기화면은 무동작 타임아웃 없음
   overlay?.remove();
   overlay = null;
   idleActive = true;
@@ -146,6 +168,8 @@ function renderPhoneInput(): void {
     void renderIdle();
   });
   overlay.confirmBtnEl.addEventListener("click", () => triggerPhoneSubmit(onSubmitPhone));
+
+  armTimeout();
 }
 
 function triggerPhoneSubmit(handler: (phone: string) => void | Promise<void>): void {
@@ -185,6 +209,8 @@ function renderCustomerLookup(): void {
       void renderIdle();
     },
   });
+
+  armTimeout();
 }
 
 // ─── CAT_MARKETING_CONSENT (연락처 마케팅 동의 요청) ─
@@ -235,9 +261,12 @@ function renderMarketingConsent(): void {
     void renderIdle();
   });
   overlay.confirmBtnEl.addEventListener("click", () => triggerPhoneSubmit(goToAgreement));
+
+  armTimeout();
 }
 
 function renderMarketingAgreement(phone: string): void {
+  armTimeout();
   sdk.template.renderAgreementPage({
     title:    "약관에 동의해 주세요",
     subtitle: "",
@@ -253,6 +282,7 @@ function renderMarketingAgreement(phone: string): void {
       // 동의된 id 배열에 선택(마케팅) id 포함 여부 = 마케팅 동의 여부
       const marketingConsent = agreedIds.includes(MARKETING_OPTIONAL_ID);
       void SocketGateway.sendCATMarketingConsent(phone, marketingConsent);
+      disarmTimeout(); // 결과 화면은 타임아웃 없음
       // 대기화면 직행 대신 결과 화면("입력 완료 / 감사합니다") 표시 후 복귀
       void showMarketingConsentDone({ onTimeout: () => { void renderIdle(); } });
     },
@@ -282,6 +312,7 @@ export function renderHome(): void {
   window.addEventListener("pageshow", onPageShow);
 
   onCleanup(() => {
+    disarmTimeout();
     document.removeEventListener("visibilitychange", onVisibility);
     window.removeEventListener("pageshow", onPageShow);
     overlay?.remove();

@@ -5,6 +5,7 @@
 import { cancelUse, CancelMessage, relayUseResult, remainingPoint, type PointUseSourceType } from "../features/point-use/point-use.service";
 import { goInsufficient, goUseSuccess } from "../features/result-page/result-navigator";
 import { navigate, onCleanup } from "../router";
+import { startInactivityTimeout } from "../features/inactivity/inactivity-timeout";
 
 const CTX_KEY = "pharm_use_point_with_customer_ctx";
 
@@ -56,6 +57,13 @@ export async function renderPointUseWithCustomerFlow(): Promise<void> {
 
   const app = document.getElementById("app");
   if (app) { app.style.transition = "opacity 0.25s ease-in"; app.style.opacity = "0"; }
+
+  const stopTimeout = startInactivityTimeout({
+    onTimeout: () => {
+      void cancelUse({ source: ctx.source, message: CancelMessage.back });
+      returnToIdle();
+    },
+  });
 
   const maxPoint = Math.min(balance, payAmount || balance);
   const minUse   = ctx.isMinPointEnabled && ctx.minPoint > 0 ? ctx.minPoint : 1;
@@ -111,6 +119,7 @@ export async function renderPointUseWithCustomerFlow(): Promise<void> {
   setTimeout(() => { if (app) app.style.opacity = "1"; }, 300);
 
   onCleanup(() => {
+    stopTimeout();
     if (app) app.style.opacity = "1";
   });
 }

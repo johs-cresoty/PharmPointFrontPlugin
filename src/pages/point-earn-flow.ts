@@ -13,6 +13,7 @@ import type { TransactionData } from "../pos/protocol/transaction-parser";
 import type { EstimateResult } from "../features/point-transaction/point-transaction.service";
 import { navigate, onCleanup } from "../router";
 import { mountPayHeader, mountConfirmFooter } from "./overlays";
+import { startInactivityTimeout } from "../features/inactivity/inactivity-timeout";
 
 const CTX_KEY = "pharm_earn_point_ctx";
 
@@ -44,7 +45,8 @@ export async function renderPointEarnFlow(): Promise<void> {
   const payAmount = parseInt(String(ctx.transactionData.payAmount ?? "0"), 10) || 0;
 
   const header = mountPayHeader({
-    hint:         "휴대폰 번호 입력 후 확인 버튼을 눌러주세요.",
+    // 적립예상 배지가 있는 화면이라 헤더가 높아 입력란이 잘림 → 안내문구 생략(공간 확보).
+    hint:         "",
     showEstimate: true,
     onBack:       () => { void cancelEarn({ source: ctx.source, message: CancelMessage.back }); returnToIdle(); },
   });
@@ -85,7 +87,14 @@ export async function renderPointEarnFlow(): Promise<void> {
 
   syncBtnState();
 
-  onCleanup(() => { header.remove(); footer.remove(); });
+  const stopTimeout = startInactivityTimeout({
+    onTimeout: () => {
+      void cancelEarn({ source: ctx.source, message: CancelMessage.back });
+      returnToIdle();
+    },
+  });
+
+  onCleanup(() => { stopTimeout(); header.remove(); footer.remove(); });
 }
 
 async function submitEarn(

@@ -12,6 +12,7 @@ import { cancelUse, CancelMessage, relayUseResult, remainingPoint, PointUseSourc
 import { goUseSuccess, goInsufficient } from "../features/result-page/result-navigator";
 import { navigate, onCleanup } from "../router";
 import { mountPayHeader, mountConfirmFooter } from "./overlays";
+import { startInactivityTimeout } from "../features/inactivity/inactivity-timeout";
 
 const CTX_KEY = "pharm_use_point_ctx";
 
@@ -52,7 +53,16 @@ export async function renderPointUseFlow(): Promise<void> {
 
   cleanupPhoneStep = renderPhoneStep(ctx, "", (fn) => { cleanupPhoneStep = fn; }, (fn) => { cleanupUseStep = fn; });
 
+  // 번호 입력 · 포인트 입력 두 단계 공통 무동작 타임아웃 (전역 터치 리셋이 두 단계 모두 커버).
+  const stopTimeout = startInactivityTimeout({
+    onTimeout: () => {
+      void cancelUse({ source: ctx.source, message: CancelMessage.back });
+      returnToIdle();
+    },
+  });
+
   onCleanup(() => {
+    stopTimeout();
     cleanupPhoneStep?.();
     cleanupUseStep?.();
   });

@@ -33,6 +33,7 @@ interface TossWebSocketApi {
 interface TossAppApi {
   getSerialNumber(): Promise<string | { serialNumber?: string; serial?: string; id?: string; value?: string }>;
   getMerchant(): Promise<{ id?: string; businessNumber?: string; name?: string }>;
+  setIdle(): Promise<void>;
 }
 
 interface TossStorageApi {
@@ -128,7 +129,18 @@ interface TossAgreementPageOptions {
   navbarButton?: unknown;
 }
 
+// 무동작 타임아웃 타이머 — CDN 번들 확인 시그니처.
+// duration 초 카운트다운 → warnAt 남으면 SDK 내장 경고 팝업(계속 사용/지금 끝내기) → 0 시 onTimeout.
+// 반환값은 타이머 종료(+경고 팝업 닫기) 함수. 동시에 1개만 허용됨.
+interface TossStartTimerOptions {
+  title:     string;
+  duration:  number; // 초
+  warnAt:    number; // 남은 초가 이 값이 되면 경고 팝업 표시
+  onTimeout: () => void;
+}
+
 interface TossTemplateApi {
+  startTimer(opts:            TossStartTimerOptions): () => void;
   renderResultPage(opts:      TossResultPageOptions): void;
   renderInputPage(opts:       TossInputPageOptions): void;
   renderKeypadInputPage(opts: TossKeypadInputPageOptions): void;

@@ -6,6 +6,7 @@ import { getCustomer, getPointBalance } from "../features/point-inquiry/point-in
 import { goLookupSuccess, goLookupFail } from "../features/result-page/result-navigator";
 import { navigate, onCleanup } from "../router";
 import { mountPhoneOverlay } from "./overlays";
+import { startInactivityTimeout } from "../features/inactivity/inactivity-timeout";
 
 let currentPhone = "";
 
@@ -79,7 +80,10 @@ export async function renderMemberSearch(): Promise<void> {
     });
   }
 
+  const stopTimeout = startInactivityTimeout({ onTimeout: () => { navigate("/"); } });
+
   onCleanup(() => {
+    stopTimeout();
     overlay.remove();
     if (app) app.style.opacity = "1";
   });

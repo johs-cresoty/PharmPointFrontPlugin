@@ -115,7 +115,7 @@ export function mountPayHeader(opts: {
         </span>
       </div>
     ` : ""}
-    <p class="header-hint">${escapeHtml(opts.hint)}</p>
+    ${opts.hint ? `<p class="header-hint">${escapeHtml(opts.hint)}</p>` : ""}
   `;
   document.body.appendChild(header);
   document.getElementById("app")?.classList.add("always-overlay");
