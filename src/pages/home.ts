@@ -4,7 +4,7 @@
  * 특수 진입 (CAT_REQUEST_NUM / CAT_REQUEST_CUSTOMER) 은 sessionStorage 로 신호받아
  * phone/customer 입력 서브뷰로 전환.
  */
-import { getPointUseConfig, getShowStoreName } from "../features/app-config/app-config.service";
+import { getInactivityTimeoutSeconds, getPointUseConfig, getShowStoreName } from "../features/app-config/app-config.service";
 import { setConfig as setAppSessionConfig } from "../features/app-session/app-session.service";
 import { getPointBalance } from "../features/point-inquiry/point-inquiry.service";
 import { showMarketingConsentDone } from "../features/result-page/result-page.service";
@@ -24,6 +24,7 @@ let idleActive = false;
 
 // 무동작 타임아웃 — 입력/약관 서브뷰에서만 활성. 대기화면·결과화면엔 없음.
 let stopTimeout: (() => void) | null = null;
+let inactivityDuration = 30; // 설정값(미동작 시 대기 시간). renderHome 진입 시 갱신.
 
 // 입력 서브뷰 진입 시 타이머 시작(기존 것 정리 후). 타임아웃 = 뒤로가기와 동일(CAT 취소 + 대기화면).
 function armTimeout(): void {
@@ -34,6 +35,7 @@ function armTimeout(): void {
       SocketGateway.sendCATFail("입력을 취소하였습니다.");
       void renderIdle();
     },
+    duration: inactivityDuration,
   });
 }
 
@@ -295,9 +297,13 @@ function renderMarketingAgreement(phone: string): void {
 
 // ─── 진입점 (라우터 등록용) ────────────
 
-export function renderHome(): void {
+export async function renderHome(): Promise<void> {
   const mode = sessionStorage.getItem(CAT_REQ_KEY);
   sessionStorage.removeItem(CAT_REQ_KEY);
+
+  // 입력 서브뷰 무동작 타임아웃 duration = 설정값 (미리 로드, 실패 시 기본 30초 유지).
+  try { inactivityDuration = await getInactivityTimeoutSeconds(); }
+  catch { /* 기본값 유지 */ }
 
   if (mode === "CAT_REQUEST_NUM")            renderPhoneInput();
   else if (mode === "CAT_REQUEST_CUSTOMER")  renderCustomerLookup();

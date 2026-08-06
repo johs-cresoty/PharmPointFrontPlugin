@@ -12,7 +12,7 @@
  */
 
 const DEFAULT_DURATION = 30;
-const DEFAULT_WARN_AT = 10;
+const DEFAULT_WARN_AT = 5;
 const DEFAULT_TITLE = "대기화면으로 이동됩니다";
 
 export type InactivityTimeoutOptions = {

@@ -14,6 +14,7 @@ import type { EstimateResult } from "../features/point-transaction/point-transac
 import { navigate, onCleanup } from "../router";
 import { mountPayHeader, mountConfirmFooter } from "./overlays";
 import { startInactivityTimeout } from "../features/inactivity/inactivity-timeout";
+import { getInactivityTimeoutSeconds } from "../features/app-config/app-config.service";
 
 const CTX_KEY = "pharm_earn_point_ctx";
 
@@ -87,11 +88,13 @@ export async function renderPointEarnFlow(): Promise<void> {
 
   syncBtnState();
 
+  const inactivitySec = await getInactivityTimeoutSeconds();
   const stopTimeout = startInactivityTimeout({
     onTimeout: () => {
       void cancelEarn({ source: ctx.source, message: CancelMessage.back });
       returnToIdle();
     },
+    duration: inactivitySec,
   });
 
   onCleanup(() => { stopTimeout(); header.remove(); footer.remove(); });

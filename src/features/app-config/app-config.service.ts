@@ -89,3 +89,21 @@ export async function setResultTimeoutSeconds(seconds: number): Promise<number> 
   await writeString(StorageKeys.RESULT_TIMEOUT_SECONDS, n);
   return n;
 }
+
+// ── 미동작 시 대기 시간 ──────────────────────
+// 입력 화면에서 사용자 액션이 없을 때 대기화면으로 이동하기까지의 시간(무동작 타임아웃 duration).
+// 결과 화면 타임아웃과 달리 SDK clamp 가 없어 설정값을 그대로 쓴다. (선택지 10~30초)
+
+export async function getInactivityTimeoutSeconds(): Promise<number> {
+  const raw = await readString(StorageKeys.INACTIVITY_TIMEOUT_SECONDS, null);
+  if (raw === null || raw === "") return StorageDefaults.INACTIVITY_TIMEOUT_SECONDS;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : StorageDefaults.INACTIVITY_TIMEOUT_SECONDS;
+}
+
+export async function setInactivityTimeoutSeconds(seconds: number): Promise<number> {
+  const parsed = parseInt(String(seconds), 10);
+  const n = Number.isFinite(parsed) && parsed > 0 ? parsed : StorageDefaults.INACTIVITY_TIMEOUT_SECONDS;
+  await writeString(StorageKeys.INACTIVITY_TIMEOUT_SECONDS, n);
+  return n;
+}

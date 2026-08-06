@@ -7,7 +7,7 @@
  *   3) 사용 포인트 입력 → 사용 결과 송신 → Result 이동
  */
 import { getCustomer, getPointBalance, type InquiryResult } from "../features/point-inquiry/point-inquiry.service";
-import { getPointUseConfig } from "../features/app-config/app-config.service";
+import { getInactivityTimeoutSeconds, getPointUseConfig } from "../features/app-config/app-config.service";
 import { cancelUse, CancelMessage, relayUseResult, remainingPoint, PointUseSource, type PointUseSourceType } from "../features/point-use/point-use.service";
 import { goUseSuccess, goInsufficient } from "../features/result-page/result-navigator";
 import { navigate, onCleanup } from "../router";
@@ -54,11 +54,13 @@ export async function renderPointUseFlow(): Promise<void> {
   cleanupPhoneStep = renderPhoneStep(ctx, "", (fn) => { cleanupPhoneStep = fn; }, (fn) => { cleanupUseStep = fn; });
 
   // 번호 입력 · 포인트 입력 두 단계 공통 무동작 타임아웃 (전역 터치 리셋이 두 단계 모두 커버).
+  const inactivitySec = await getInactivityTimeoutSeconds();
   const stopTimeout = startInactivityTimeout({
     onTimeout: () => {
       void cancelUse({ source: ctx.source, message: CancelMessage.back });
       returnToIdle();
     },
+    duration: inactivitySec,
   });
 
   onCleanup(() => {

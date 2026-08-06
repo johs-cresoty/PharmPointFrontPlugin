@@ -7,6 +7,7 @@ import { goLookupSuccess, goLookupFail } from "../features/result-page/result-na
 import { navigate, onCleanup } from "../router";
 import { mountPhoneOverlay } from "./overlays";
 import { startInactivityTimeout } from "../features/inactivity/inactivity-timeout";
+import { getInactivityTimeoutSeconds } from "../features/app-config/app-config.service";
 
 let currentPhone = "";
 
@@ -80,7 +81,8 @@ export async function renderMemberSearch(): Promise<void> {
     });
   }
 
-  const stopTimeout = startInactivityTimeout({ onTimeout: () => { navigate("/"); } });
+  const inactivitySec = await getInactivityTimeoutSeconds();
+  const stopTimeout = startInactivityTimeout({ onTimeout: () => { navigate("/"); }, duration: inactivitySec });
 
   onCleanup(() => {
     stopTimeout();

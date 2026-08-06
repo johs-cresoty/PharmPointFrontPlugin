@@ -13,8 +13,8 @@
  *   - #app 은 hidden 처리 → 그리드/입력 페이지 진입 시 다시 표시.
  *   - 저장 성공 후 renderResultPage → onTimeout 으로 settings 재진입.
  */
-import { getMinPoint, getResultTimeoutSeconds, getShowStoreName, setMinPoint, setResultTimeoutSeconds } from "../features/app-config/app-config.service";
-import { showMinPointSaved, showTimeoutSaved } from "../features/result-page/result-page.service";
+import { getInactivityTimeoutSeconds, getMinPoint, getResultTimeoutSeconds, getShowStoreName, setInactivityTimeoutSeconds, setMinPoint, setResultTimeoutSeconds } from "../features/app-config/app-config.service";
+import { showInactivityTimeoutSaved, showMinPointSaved, showTimeoutSaved } from "../features/result-page/result-page.service";
 import { StorageKeys } from "../shared/constants/storage-keys";
 import { navigate, onCleanup } from "../router";
 
@@ -23,6 +23,7 @@ const STYLE_ID     = "pharm-settings-style";
 
 const MIN_POINT_PRESETS      = [0, 100, 500, 1000];
 const RESULT_TIMEOUT_PRESETS = [3, 4, 5, 7, 10];
+const INACTIVITY_TIMEOUT_PRESETS = [10, 15, 20, 25, 30];
 
 function fmtPoint(n: number): string {
   return `${n.toLocaleString("ko-KR")}P`;
@@ -84,6 +85,10 @@ function mountContainer(): HTMLElement {
     <div class="setting-row" id="s-timeout-row" style="cursor:pointer">
       <span class="setting-label">화면 대기 시간</span>
       <span class="setting-value" id="s-timeout">-</span>
+    </div>
+    <div class="setting-row" id="s-inactivity-row" style="cursor:pointer">
+      <span class="setting-label">미동작 시 대기 시간</span>
+      <span class="setting-value" id="s-inactivity">-</span>
     </div>
     <div class="setting-row">
       <span class="setting-label">대기 화면에 매장명 표시</span>
@@ -200,6 +205,36 @@ async function openResultTimeoutGrid(): Promise<void> {
   } as never);
 }
 
+// ─── 미동작 시 대기 시간 (그리드 선택) ──────────
+
+function buildInactivityOptions(current: number): Array<{ id: string; title: string; onClick: () => void }> {
+  return INACTIVITY_TIMEOUT_PRESETS.map((v) => ({
+    id:      String(v),
+    title:   v === current ? `${v}초\n(현재 설정)` : `${v}초`,
+    onClick: () => { void applyInactivityTimeout(v); },
+  }));
+}
+
+async function applyInactivityTimeout(sec: number): Promise<void> {
+  const saved = await setInactivityTimeoutSeconds(sec);
+  await showInactivityTimeoutSaved({
+    seconds: saved,
+    onTimeout: () => { navigate("/settings"); },
+  });
+}
+
+async function openInactivityTimeoutGrid(): Promise<void> {
+  hideContainer();
+  const current = await getInactivityTimeoutSeconds();
+  sdk.template.renderSelectGridPage({
+    title:    "미동작 시 대기 시간",
+    subtitle: "설정",
+    options:  buildInactivityOptions(current),
+    onBack:   () => { navigate("/settings"); },
+    navbarButton: { label: "닫기", onClick: () => { navigate("/settings"); } },
+  } as never);
+}
+
 // ─── 진입점 ─────────────────────────────────
 
 export async function renderSettings(): Promise<void> {
@@ -221,6 +256,7 @@ export async function renderSettings(): Promise<void> {
 
   document.getElementById("s-min-point")!.textContent = fmtPoint(await getMinPoint());
   document.getElementById("s-timeout")!.textContent   = `${await getResultTimeoutSeconds()}초`;
+  document.getElementById("s-inactivity")!.textContent = `${await getInactivityTimeoutSeconds()}초`;
   (document.getElementById("s-show-store") as HTMLInputElement).checked = await getShowStoreName();
 
   const baudItem = await sdk.storage.get({ key: StorageKeys.BAUD_RATE });
@@ -229,6 +265,7 @@ export async function renderSettings(): Promise<void> {
   // 클릭·변경 이벤트
   document.getElementById("s-min-point-row")!.addEventListener("click", () => void openMinPointGrid());
   document.getElementById("s-timeout-row")!.addEventListener("click", () => void openResultTimeoutGrid());
+  document.getElementById("s-inactivity-row")!.addEventListener("click", () => void openInactivityTimeoutGrid());
 
   (document.getElementById("s-show-store") as HTMLInputElement).addEventListener("change", async (e) => {
     const checked = (e.target as HTMLInputElement).checked;

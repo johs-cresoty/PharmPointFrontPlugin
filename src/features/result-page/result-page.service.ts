@@ -168,3 +168,12 @@ export function showTimeoutSaved(args: { seconds: number; onTimeout?: () => void
     onTimeout: args.onTimeout, timerMs: args.timerMs,
   });
 }
+
+export function showInactivityTimeoutSaved(args: { seconds: number; onTimeout?: () => void; timerMs?: number }): Promise<void> {
+  return render({
+    type: "image", status: "success",
+    title:       "설정 완료",
+    description: `미동작 시 대기 시간 ${args.seconds}초`,
+    onTimeout: args.onTimeout, timerMs: args.timerMs,
+  });
+}
