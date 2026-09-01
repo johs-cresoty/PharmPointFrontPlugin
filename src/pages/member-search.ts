@@ -48,19 +48,16 @@ export async function renderMemberSearch(): Promise<void> {
 
   const app = document.getElementById("app");
 
-  let storeName = "";
-  try {
-    const merchant = await sdk.app.getMerchant();
-    storeName = merchant.name ?? "";
-  } catch (e) {
-    console.warn("[MemberSearch] 매장명 조회 실패", e);
-  }
-
-  const overlay = mountPhoneOverlay({ storeName });
+  // 오버레이 상단은 back 버튼 하나만 — minimal-overlay 모드로 padding-top 축소해
+  // 하단 SDK 영역(input + keypad + button) 이 잘리지 않게 한다.
+  // 매장명·hint 모두 표시 안 함(SDK 메인타이틀이 안내 역할).
+  const overlay = mountPhoneOverlay({ storeName: "", hint: "", appMode: "minimal-overlay" });
 
   sdk.template.renderInputPage({
     type: "phone",
-    top:  { title: "", subtitle: "" },
+    // subtitle 은 non-breaking space( ) — 보이지는 않지만 라인 높이는 예약해
+    // 포인트 사용 화면(subtitle="15,000원 결제") 과 title·keypad 위치를 동일하게 유지.
+    top:  { title: "포인트를 조회할게요", subtitle: " " },
     input: {
       placeholder: "전화번호 입력",
       onChange: (value) => { currentPhone = value; },

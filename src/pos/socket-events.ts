@@ -10,6 +10,8 @@ export const SocketEvent = {
   TerminalEarnPointSingle:  "TERMINAL_EARN_POINT_SINGLE",   // 001
   TerminalEarnPointComplex: "TERMINAL_EARN_POINT_COMPLEX",  // 002
   TerminalUsePoint:         "TERMINAL_USE_POINT",           // 003
+  TerminalBarcodeDisplay:   "TERMINAL_BARCODE_DISPLAY",     // 005
+  TerminalHideScreen:       "TERMINAL_HIDE_SCREEN",         // 999
 
   // ── 캣포스(CAT) 전문 ─────────────────────────
   CatConnect:              "CAT_CONNECT",                   // CONNECT
@@ -21,6 +23,10 @@ export const SocketEvent = {
   CatUsePointNoCustomer:   "CAT_USE_POINT_NO_CUSTOMER",     // USE_POINT_REQ
   CatUsePointWithCustomer: "CAT_USE_POINT_WITH_CUSTOMER",   // USE_POINT_WITH_CUSTOMER_REQ
   CatMarketingConsent:     "CAT_MARKETING_CONSENT",         // MARKETING_CONSENT_REQ
+
+  // ── 고객 가격표시기 (catpos-cart-display-spec.md) ──
+  CatCartUpdate:           "CAT_CART_UPDATE",               // CART_UPDATE — 카트 스냅샷 갱신
+  CatCartClear:            "CAT_CART_CLEAR",                // CART_CLEAR — 결제 개시 직전 종료
 } as const;
 
 export type SocketEventType = typeof SocketEvent[keyof typeof SocketEvent];

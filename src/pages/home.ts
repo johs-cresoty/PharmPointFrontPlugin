@@ -81,6 +81,8 @@ function removeStoreNameOverlay(): void {
 // ─── 대기화면 렌더 ─────────────────────────
 
 async function renderIdle(): Promise<void> {
+  // 진단: 대기화면(포인트 조회 버튼)이 실제로 다시 그려지는 시점 추적.
+  console.log("[Home] 대기화면 렌더 — renderIdlePage 호출");
   disarmTimeout(); // 대기화면은 무동작 타임아웃 없음
   overlay?.remove();
   overlay = null;
@@ -234,9 +236,10 @@ function renderMarketingConsent(): void {
   idleActive = false;
   currentPhone = "";
 
-  // 포인트 조회 번호 입력 화면 재사용 — 힌트 문구 변경 + 인라인 개인정보 동의 체크박스 제외
-  // (동의는 이후 renderAgreementPage 가 담당).
-  overlay = mountPhoneOverlay({ hint: "휴대폰 번호를 입력해 주세요.", appMode: "phone-overlay-on", agreement: false });
+  // 포인트 조회/사용 화면과 동일한 스타일 — minimal-overlay 로 상단 예약 공간 축소해
+  // title·keypad 위치가 다른 두 화면과 정확히 일치하도록. 오버레이 hint 는 렌더 안 함.
+  // 인라인 개인정보 동의 체크박스는 제외 (동의는 이후 renderAgreementPage 가 담당).
+  overlay = mountPhoneOverlay({ hint: "", appMode: "minimal-overlay", agreement: false });
 
   const goToAgreement = (phone: string): void => {
     overlay?.remove(); // 입력 오버레이 제거 후 약관 화면으로
@@ -246,7 +249,7 @@ function renderMarketingConsent(): void {
 
   sdk.template.renderInputPage({
     type: "phone",
-    top:  { title: "", subtitle: "" },
+    top:  { title: "휴대폰 번호를 입력해주세요", subtitle: " " },
     input: {
       placeholder: "전화번호 입력",
       onChange: (value) => { currentPhone = value; },
@@ -310,10 +313,13 @@ export async function renderHome(): Promise<void> {
   else if (mode === "CAT_MARKETING_CONSENT") renderMarketingConsent();
   else                                        void renderIdle();
 
+  // 진단: 웹뷰가 백그라운드↔포그라운드 전환되는지 추적.
+  // (VAN 모듈이 화면을 잠깐 덮으면 여기 로그가 남고, 안 남으면 순수 네이티브 오버레이다.)
   const onVisibility = (): void => {
+    console.log(`[Home] visibilitychange → ${document.visibilityState}`);
     if (document.visibilityState === "visible") void syncIdleConfig();
   };
-  const onPageShow = (): void => { void syncIdleConfig(); };
+  const onPageShow = (): void => { console.log("[Home] pageshow"); void syncIdleConfig(); };
   document.addEventListener("visibilitychange", onVisibility);
   window.addEventListener("pageshow", onPageShow);
 

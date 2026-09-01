@@ -3,7 +3,7 @@
  * 캣포스가 이미 고객을 선택했으므로 휴대폰 입력 없이 사용 포인트 입력 화면으로 직행.
  */
 import { cancelUse, CancelMessage, relayUseResult, remainingPoint, type PointUseSourceType } from "../features/point-use/point-use.service";
-import { goInsufficient, goUseSuccess } from "../features/result-page/result-navigator";
+import { goInsufficient, goPayAmountBelowMinPoint, goUseSuccess } from "../features/result-page/result-navigator";
 import { navigate, onCleanup } from "../router";
 import { startInactivityTimeout } from "../features/inactivity/inactivity-timeout";
 import { getInactivityTimeoutSeconds } from "../features/app-config/app-config.service";
@@ -44,6 +44,23 @@ export async function renderPointUseWithCustomerFlow(): Promise<void> {
 
   const balance   = ctx.balance   || 0;
   const payAmount = ctx.payAmount || 0;
+
+  // 사전 차단 — 결제금액이 최소 사용 포인트 미만이면 포인트 입력 화면을 띄우지 않고
+  // 바로 결과 화면으로 라우팅 + CATPOS 에 FAIL 회신. (point-use-flow 의 CAT 경로와 동일 정책)
+  // 아래 잔액-기반 insufficient 판정과는 별개로, 결제금액만으로 먼저 판정한다.
+  if (ctx.isMinPointEnabled && ctx.minPoint > 0 && payAmount < ctx.minPoint) {
+    // FAIL 메시지 = 결과 화면 문구와 동일. 줄바꿈은 \r\n (CRLF) —
+    // CATPOS(Delphi) 의 TLabel/TMemo 는 LF 단독으로 개행을 인식하지 않는다.
+    const payAmountFmt = payAmount.toLocaleString("ko-KR");
+    const minPointFmt  = ctx.minPoint.toLocaleString("ko-KR");
+    const msg = `포인트를 사용할 수 없어요.\r\n결제 금액 ${payAmountFmt}원\r\n최소 사용 포인트 ${minPointFmt}P`;
+    console.log(`[PointUseWithCustomer] 결제금액<최소포인트 사전차단 — payAmount=${payAmount}, minPoint=${ctx.minPoint}`);
+    void cancelUse({ source: ctx.source, message: msg });
+    clearContext();
+    goPayAmountBelowMinPoint({ payAmount, minPoint: ctx.minPoint });
+    return;
+  }
+
   const storeName = await getStoreName();
 
   const insufficient =

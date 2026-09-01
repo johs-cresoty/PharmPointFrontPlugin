@@ -28,7 +28,14 @@ type InternalState = {
   handle:       TossWebSocketServerHandle | null;
 };
 
+// ⚠️ 진단용 — createWebSocketTransport 가 여러 번 호출되면 카운트가 올라간다.
+// 정상 케이스: SocketGateway.start() 가 1번만 호출되면 여기도 1번만 호출되어야 한다.
+let wsTransportInstanceCount = 0;
+
 export function createWebSocketTransport({ onText, onError }: WebSocketTransportHandlers): WebSocketTransport {
+
+  const myInstanceId = ++wsTransportInstanceCount;
+  console.log(`[WSTransport] 인스턴스 생성 #${myInstanceId}`);
 
   const state: InternalState = {
     serverId:     cfg.wsServerId,
@@ -52,14 +59,17 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
   }
 
   async function start(): Promise<void> {
+    console.log(`[WSTransport #${myInstanceId}] start() 진입 (기존 handle=${state.handle ? "있음(재진입 방지)" : "없음"})`);
     if (state.handle) return;
 
     // 이전 세션에서 남은 고아 서버 정리 — 우리 serverId 또는 우리 port 와 일치하는 것만.
     // (Toss 내부 서비스(로그 서버 등)까지 close 하면 개발자 도구가 죽음)
     try {
       const listRes = await sdk.websocket.list();
-      for (const s of listRes.servers ?? []) {
-        if (s.serverId !== cfg.wsServerId && s.port !== cfg.port) continue;
+      const targets = (listRes.servers ?? []).filter((s) => s.serverId === cfg.wsServerId || s.port === cfg.port);
+      console.log(`[WSTransport #${myInstanceId}] 기존 서버 정리 시도 — ${targets.length}개 (전체 ${(listRes.servers ?? []).length}개 중)`);
+      for (const s of targets) {
+        console.log(`[WSTransport #${myInstanceId}] sdk.websocket.close serverId=${s.serverId} port=${s.port}`);
         try { await sdk.websocket.close({ serverId: s.serverId }); }
         catch (e) { console.warn("[WS] close 실패 serverId=" + s.serverId, e); }
       }
@@ -67,6 +77,7 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
       console.warn("[WS] 서버 목록 정리 실패", e);
     }
 
+    console.log(`[WSTransport #${myInstanceId}] sdk.websocket.start 호출 — 새 리스너 등록`);
     state.handle = await sdk.websocket.start({
       serverId: state.serverId,
       port:     cfg.port,
@@ -79,7 +90,8 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
       onMessage: ({ connectionId, data }) => {
         state.connectionId = connectionId;
         const text = decodePayloadData(data);
-        console.log("[WS] 수신 ←", text);
+        // 어느 transport 인스턴스의 콜백이 실행됐는지 표시 — 여러 개면 leak 확정.
+        console.log(`[WS #${myInstanceId}] 수신 ←`, text);
         try { onText(text); }
         catch (e) { onError?.(e); }
       },
@@ -93,6 +105,7 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
         onError?.(payload);
       },
     });
+    console.log(`[WSTransport #${myInstanceId}] sdk.websocket.start 완료`);
   }
 
   async function stop(): Promise<void> {

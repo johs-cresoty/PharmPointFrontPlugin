@@ -7,7 +7,7 @@
  *   3) 사용자 휴대폰 번호 입력 → commitWithFallback → Result 로 이동
  */
 import { commitWithFallback, estimate, cancelEarn, type CommitCommand } from "../features/point-earn/point-earn.service";
-import { CancelMessage, type PointUseSourceType } from "../features/point-use/point-use.service";
+import { CancelMessage, PointUseSource, type PointUseSourceType } from "../features/point-use/point-use.service";
 import { goEarnSuccess } from "../features/result-page/result-navigator";
 import type { TransactionData } from "../pos/protocol/transaction-parser";
 import type { EstimateResult } from "../features/point-transaction/point-transaction.service";
@@ -33,6 +33,14 @@ function loadContext(): EarnContext | null {
 function clearContext(): void { sessionStorage.removeItem(CTX_KEY); }
 
 function returnToIdle(): void { clearContext(); navigate("/"); }
+
+/** 보관된 컨텍스트가 단말기(TRM) 유래인지. TRM 999(화면 미노출) 판별용. */
+export function isTerminalEarnContext(): boolean {
+  return loadContext()?.source === PointUseSource.TERMINAL;
+}
+
+/** 컨텍스트 폐기 — 외부(999 등)에서 이 화면을 강제 종료할 때. */
+export function clearEarnContext(): void { clearContext(); }
 
 async function getStoreName(): Promise<string> {
   try { const m = await sdk.app.getMerchant(); return m?.name ?? ""; }
@@ -66,11 +74,12 @@ export async function renderPointEarnFlow(): Promise<void> {
   const estimatePromise: Promise<EstimateResult> = estimate(ctx.transactionData)
     .catch((e) => { console.warn("[earn-flow] estimate error", e); return { success: false, error: String(e) } as EstimateResult; });
 
+  // 배지는 기본 숨김(공간은 유지). 유효한 예상 포인트(1P 이상)를 받았을 때만 노출한다.
+  // 조회 실패거나 0P 면 "0P 적립예상" 대신 아무것도 보이지 않게 둔다.
   void estimatePromise.then((est) => {
-    if (est.success && est.data) {
-      const p = parseInt(String(est.data.pointAmount ?? "0"), 10) || 0;
-      header.setEstimate(`${p.toLocaleString()}P 적립예상`);
-    }
+    const p = est.success && est.data ? parseInt(String(est.data.pointAmount ?? "0"), 10) || 0 : 0;
+    if (p > 0) header.setEstimate(`${p.toLocaleString()}P 적립예상`);
+    else       console.log(`[earn-flow] 적립예상 미표시 (success=${est.success}, point=${p})`);
   });
 
   sdk.template.renderInputPage({

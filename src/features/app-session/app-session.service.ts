@@ -21,7 +21,13 @@ import {
 } from "../../pos/protocol/transaction-parser";
 import { getPointSaveSetting } from "../point-settings/point-settings.service";
 import { PointUseSource } from "../point-use/point-use.service";
-import type { CatEventPayload, TerminalEventPayload } from "../../pos/socket-gateway";
+import type {
+  CatEventPayload,
+  TerminalEventPayload,
+  TerminalBarcodePayload,
+} from "../../pos/socket-gateway";
+import type { BarcodeDisplayData } from "../../pos/protocol/terminal-codec";
+import { parseCartData, type CartData } from "../../pos/cart-types";
 
 // ─── 화면 라우팅 콜백 타입 ───────────────────
 
@@ -54,6 +60,14 @@ export type AppSessionHandlers = {
   onNavigateToUsePoint?:   (args: NavigateUsePointArgs) => void;
   onNavigateToCatRequest?: (args: NavigateCatRequestArgs) => void;
   onCatDisconnect?:        () => void;
+  /** CART_UPDATE — 첫 수신 시 가격표시기 진입, 이후 실시간 갱신. */
+  onCartUpdate?:           (cart: CartData) => void;
+  /** CART_CLEAR — 결제 개시 직전. 대기화면으로 복귀. */
+  onCartClear?:            () => void;
+  /** TRM 005 — 바코드 표시 요청. 화면 진입 후 006 회신은 세션이 담당. */
+  onBarcodeDisplay?:       (barcode: BarcodeDisplayData) => void;
+  /** TRM 999 — 화면 미노출 요청. 단말기 유래 화면만 닫는다. */
+  onTerminalHideScreen?:   () => void;
 };
 
 // ─── 세션 상태 ───────────────────────────────
@@ -90,7 +104,10 @@ export function start(handlers: AppSessionHandlers = {}): void {
   started = true;
 
   const E = SocketEvent;
-  const reg = (event: string, fn: (payload: CatEventPayload | TerminalEventPayload) => void) => {
+  const reg = (
+    event: string,
+    fn: (payload: CatEventPayload | TerminalEventPayload | TerminalBarcodePayload) => void,
+  ) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     unsubscribes.push(SocketGateway.on(event as any, fn));
   };
@@ -127,6 +144,18 @@ export function start(handlers: AppSessionHandlers = {}): void {
     handlers.onNavigateToLookup?.({
       source: PointUseSource.TERMINAL, transactionData: td,
     });
+  });
+
+  // 005 — 바코드 표시 요청. 명세상 수신 즉시 006 회신.
+  reg(E.TerminalBarcodeDisplay, (payload) => {
+    const { barcode } = payload as TerminalBarcodePayload;
+    handlers.onBarcodeDisplay?.(barcode);
+    SocketGateway.sendTerminalBarcodeAck("0000");
+  });
+
+  // 999 — 화면 미노출 요청. 응답 전문은 없다(게이트웨이 자동 ACK 로 끝).
+  reg(E.TerminalHideScreen, () => {
+    handlers.onTerminalHideScreen?.();
   });
 
   // ── CAT ──────────────────────────────────
@@ -184,6 +213,17 @@ export function start(handlers: AppSessionHandlers = {}): void {
       source: PointUseSource.CAT_WITH_CUSTOMER,
       balance, payAmount, minPoint, isMinPointEnabled,
     });
+  });
+
+  // ── 고객 가격표시기 ─────────────────────────
+  reg(E.CatCartUpdate, (payload) => {
+    const { data } = payload as CatEventPayload;
+    const cart = parseCartData(data);
+    handlers.onCartUpdate?.(cart);
+  });
+
+  reg(E.CatCartClear, () => {
+    handlers.onCartClear?.();
   });
 
   SocketGateway.start().catch((e) => console.error("[AppSession] socket start fail", e));

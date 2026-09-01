@@ -5,7 +5,8 @@
 // 미커버된 SDK 영역은 Phase 3 (Toss 어댑터 계층) 에서 확장 예정.
 
 interface TossSerialApi {
-  open(opts: { baudRate: number }): Promise<void>;
+  // intercept: true — 리더기 모드 필수. 플러그인이 수신 전문을 먼저 받아 TRM/KIS 로 분기.
+  open(opts: { baudRate: number; intercept?: boolean }): Promise<void>;
   close(): Promise<void>;
   write(opts: { data: Uint8Array }): Promise<void>;
   listen(cb: (p: { data: Uint8Array }) => void): () => void;
@@ -34,6 +35,12 @@ interface TossAppApi {
   getSerialNumber(): Promise<string | { serialNumber?: string; serial?: string; id?: string; value?: string }>;
   getMerchant(): Promise<{ id?: string; businessNumber?: string; name?: string }>;
   setIdle(): Promise<void>;
+}
+
+// VAN(밴) 결제모듈 — KIS 전문 전달용. write 만 사용.
+// 응답은 VAN 모듈이 단말기로 직접 회신하므로 수신 API 불필요(토스 확인). sdk.van.listen 은 미제공.
+interface TossVanApi {
+  write(opts: { data: Uint8Array }): Promise<void>;
 }
 
 interface TossStorageApi {
@@ -139,8 +146,32 @@ interface TossStartTimerOptions {
   onTimeout: () => void;
 }
 
+// 주문 결과 템플릿 (renderOrderResultPage) — 고객 가격표시기 구현 검토용.
+// 가이드 기준 cta 는 필수 파라미터. 표시 전용(버튼 없이) 사용 가능한지는 실단말 테스트로 확인 중.
+interface TossOrderResultItem {
+  label:     string;
+  value?:    number;
+  quantity?: number;
+  options?:  Array<{ type: "option" | "discount"; label: string; value: number }>;
+  imageUrl?: string;
+}
+
+interface TossOrderResultPageOptions {
+  type?: "paid" | "cancelled";   // default: paid
+  order: {
+    items:   TossOrderResultItem[];
+    summary: {
+      totalAmount: number;
+      /** 합계 외 커스텀 라벨+값 행. value 가 string 이라 "10,000원"·"1,500P" 등 자유 표기 가능. */
+      items?: Array<{ label: string; value: string; theme: "blue" | "red" }>;
+    };
+  };
+  cta: { text: string; onClick: () => void };
+}
+
 interface TossTemplateApi {
   startTimer(opts:            TossStartTimerOptions): () => void;
+  renderOrderResultPage(opts: TossOrderResultPageOptions): void;
   renderResultPage(opts:      TossResultPageOptions): void;
   renderInputPage(opts:       TossInputPageOptions): void;
   renderKeypadInputPage(opts: TossKeypadInputPageOptions): void;
@@ -154,6 +185,7 @@ interface TossTemplateApi {
 interface TossSdk {
   app:       TossAppApi;
   serial:    TossSerialApi;
+  van:       TossVanApi;
   websocket: TossWebSocketApi;
   storage:   TossStorageApi;
   template:  TossTemplateApi;

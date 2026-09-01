@@ -82,9 +82,10 @@ export function showEarnSuccess(args: {
   earnPoint: number; storeName: string; balancePoint: number;
   customerName?: string; onTimeout?: () => void; timerMs?: number; buttons?: ResultButton[];
 }): Promise<void> {
+  // 적립 포인트를 못 구한 경우(예상 조회 실패 + 확정 응답에도 값 없음) "0P" 대신 포인트를 생략한다.
   return render({
     type: "image", status: "success",
-    title:       `${fmtPoint(args.earnPoint)}P 적립 완료`,
+    title:       args.earnPoint > 0 ? `${fmtPoint(args.earnPoint)}P 적립 완료` : "적립 완료",
     description: `${customerPrefix(args.customerName)}${fmtPoint(args.balancePoint)}P 있어요`,
     onTimeout: args.onTimeout, timerMs: args.timerMs, buttons: args.buttons,
   });
@@ -110,6 +111,22 @@ export function showInsufficientPoint(args: {
     type: "image", status: "error",
     title:       "포인트 부족",
     description: `최소 ${fmtPoint(args.minPoint)}P부터 사용 가능합니다.\n보유 포인트 ${fmtPoint(args.balancePoint)}P`,
+    onTimeout: args.onTimeout, timerMs: args.timerMs, buttons: args.buttons,
+  });
+}
+
+/**
+ * 결제금액 < 최소 사용 포인트 사전 차단 결과 화면.
+ * 휴대폰 번호 입력 전에 CAT 요청의 payAmount 가 minPoint 미만인 경우 사용.
+ */
+export function showPayAmountBelowMinPoint(args: {
+  payAmount: number; minPoint: number;
+  onTimeout?: () => void; timerMs?: number; buttons?: ResultButton[];
+}): Promise<void> {
+  return render({
+    type: "image", status: "error",
+    title:       "포인트 사용 불가",
+    description: `결제 금액 ${fmtPoint(args.payAmount)}원\n최소 사용 포인트 ${fmtPoint(args.minPoint)}P`,
     onTimeout: args.onTimeout, timerMs: args.timerMs, buttons: args.buttons,
   });
 }

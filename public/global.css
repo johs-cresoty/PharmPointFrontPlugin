@@ -46,6 +46,16 @@ body > #app.always-overlay {
 #app.always-overlay nav { display: none !important; }
 #app.always-overlay img[src*="logo-toss"] { display: none !important; }
 
+/* 최소 overlay — back 버튼만 있는 화면 (SDK 가 title/subtitle 을 렌더).
+   상단 예약 공간을 좁혀 하단 SDK(input+keypad+button) 영역이 잘리지 않도록. */
+body > #app.minimal-overlay {
+  padding-top: 76px !important;
+  padding-bottom: 160px !important;
+  box-sizing: border-box !important;
+}
+#app.minimal-overlay nav { display: none !important; }
+#app.minimal-overlay img[src*="logo-toss"] { display: none !important; }
+
 .overlay-top, .overlay-bottom {
   position: fixed; left: 0; right: 0; background: #fff;
   z-index: 10; padding: 0 24px;

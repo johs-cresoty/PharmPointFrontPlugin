@@ -18,7 +18,8 @@ import { SocketEvent, type SocketEventType } from "./socket-events";
 import * as CatposCodec from "./protocol/catpos-codec";
 import * as TerminalCodec from "./protocol/terminal-codec";
 import { createWebSocketTransport, type WebSocketTransport } from "./transport/websocket-transport";
-import { createSerialTransport, type SerialTransport } from "./transport/serial-transport";
+import { createSerialTransport, toHex, type SerialTransport } from "./transport/serial-transport";
+import { createVanTransport, type VanTransport } from "./transport/van-transport";
 
 // ── 이벤트 payload 타입 ───────────────────────────
 
@@ -31,7 +32,17 @@ export type TerminalEventPayload = {
   raw:    Uint8Array;
 };
 
-type EventListener = (payload: CatEventPayload | TerminalEventPayload) => void;
+/** 005 전용 — fields 대신 원본 바이트에서 직접 파싱한 구조체를 싣는다. */
+export type TerminalBarcodePayload = {
+  barcode: TerminalCodec.BarcodeDisplayData;
+};
+
+type AnyPayload =
+  | CatEventPayload
+  | TerminalEventPayload
+  | TerminalBarcodePayload;
+
+type EventListener = (payload: AnyPayload) => void;
 
 // ── pub/sub 버스 ─────────────────────────────────
 
@@ -48,7 +59,7 @@ function createEmitter() {
     return () => listeners.get(event)?.delete(fn);
   }
 
-  function emit(event: SocketEventType, payload: CatEventPayload | TerminalEventPayload): void {
+  function emit(event: SocketEventType, payload: AnyPayload): void {
     const set = listeners.get(event);
     if (!set) return;
     for (const fn of set) {
@@ -73,6 +84,8 @@ function mapCatCommandToEvent(cmd: string): SocketEventType | null {
     case C.CATPOS_USE_POINT_REQ:                return SocketEvent.CatUsePointNoCustomer;
     case C.CATPOS_USE_POINT_WITH_CUSTOMER_REQ:  return SocketEvent.CatUsePointWithCustomer;
     case C.CATPOS_MARKETING_CONSENT_REQ:        return SocketEvent.CatMarketingConsent;
+    case C.CATPOS_CART_UPDATE:                  return SocketEvent.CatCartUpdate;
+    case C.CATPOS_CART_CLEAR:                   return SocketEvent.CatCartClear;
     default: return null;
   }
 }
@@ -82,6 +95,8 @@ function mapTerminalCommandToEvent(cmd: string): SocketEventType | null {
     case C.TERMINAL_COMMAND_001: return SocketEvent.TerminalEarnPointSingle;
     case C.TERMINAL_COMMAND_002: return SocketEvent.TerminalEarnPointComplex;
     case C.TERMINAL_COMMAND_003: return SocketEvent.TerminalUsePoint;
+    case C.TERMINAL_COMMAND_005: return SocketEvent.TerminalBarcodeDisplay;
+    case C.TERMINAL_COMMAND_999: return SocketEvent.TerminalHideScreen;
     default: return null;
   }
 }
@@ -93,6 +108,7 @@ function create() {
   let catSessionActive = false;
   let ws:  WebSocketTransport | null = null;
   let ser: SerialTransport    | null = null;
+  let van: VanTransport       | null = null;
 
   // ── CATPOS JSON 수신 처리 ──────────────────────
   function onCatText(text: string): void {
@@ -109,37 +125,93 @@ function create() {
     bus.emit(event, { data: msg.data });
   }
 
-  // ── TERMINAL 바이너리 프레임 수신 처리 ─────────
+  // ── TERMINAL(팜포인트 TRM) 프레임 수신 처리 ─────────
+  // KIS 전문은 여기까지 오지 않는다(SerialTransport 라우터가 TRM 만 넘기고, KIS 는 onVanForward→VAN).
   function onSerialFrame(frame: Uint8Array): void {
-    // CAT 세션 활성 중에는 단말기 신호 차단 (Android 동일)
-    if (catSessionActive) return;
+    // 진입 즉시 원문부터 남긴다 — 아래 어느 분기로 빠지든(세션 차단·파싱 실패·미지원 커맨드)
+    // 단말기가 실제로 뭘 보냈는지는 항상 확인 가능해야 한다.
+    console.log(`[SocketGateway] <= TRM RAW (${frame.length} bytes) ${toHex(frame)}`);
+
+    if (catSessionActive) {
+      console.warn(`[SocketGateway] CAT 세션 활성 — 단말기 전문 무시 (${toHex(frame)})`);
+      return; // CAT 세션 활성 중에는 단말기 신호 차단 (Android 동일)
+    }
 
     const parsed = TerminalCodec.parse(frame);
-    if (!parsed) return;
-
+    if (!parsed) {
+      console.warn(`[SocketGateway] TRM 파싱 실패 — ${toHex(frame)}`);
+      return;
+    }
     // ACK 자동 회신 (Android SocketManager 동일)
-    ser?.send(TerminalCodec.ack()).catch((e) => console.error("[SocketGateway] ACK send fail", e));
+    const ackBytes = TerminalCodec.ack();
+    console.log(`[SocketGateway] => ACK ${toHex(ackBytes)}`);
+    ser?.send(ackBytes).catch((e) => console.error("[SocketGateway] ACK send fail", e));
+
+    // 005(바코드 표시)는 길이 필드가 BCD 바이너리라 fields(EUC-KR 디코딩)로 읽을 수 없다.
+    // 원본 바이트에서 직접 파싱한 구조체를 실어 보낸다.
+    if (parsed.cmd === C.TERMINAL_COMMAND_005) {
+      const barcode = TerminalCodec.parseBarcodeDisplay(frame);
+      if (!barcode) {
+        console.warn(`[SocketGateway] 005 파싱 실패 — ${toHex(frame)}`);
+        return;
+      }
+      console.log(
+        `[SocketGateway] <= 005 바코드표시 수신 — 종류=${barcode.kindRaw}(${barcode.kind}) ` +
+        `timeout=${barcode.timeoutSec}초 문구="${barcode.text}" 데이터=${barcode.dataLength}바이트`,
+      );
+      console.log(`[SocketGateway] <= 005 바코드 데이터: ${barcode.data}`);
+      bus.emit(SocketEvent.TerminalBarcodeDisplay, { barcode });
+      return;
+    }
+
+    console.log(`[SocketGateway] <= TRM cmd=${parsed.cmd} fields=${JSON.stringify(parsed.fields)}`);
 
     const event = mapTerminalCommandToEvent(parsed.cmd);
-    if (!event) return;
+    if (!event) {
+      // 매핑 안 된 커맨드도 조용히 버리지 않는다 — 미지원 전문이 오는지 로그로 드러나야 한다.
+      console.warn(`[SocketGateway] TRM 미지원 커맨드 — cmd=${parsed.cmd} (무시)`);
+      return;
+    }
     bus.emit(event, { fields: parsed.fields, raw: parsed.raw });
+  }
+
+  // ── 단말(시리얼) → VAN 결제모듈 중계 ──────────
+  // 팜포인트는 '리더기 모드' — 결제(KIS)를 개시하지 않고 단말의 KIS 전문을 VAN 모듈로 전달한다.
+  //   · TRM(팜포인트) 전문은 SerialTransport 가 걸러 onSerialFrame 으로 넘긴다(여기 안 옴).
+  //   · TRM 이 아닌 원본(KIS 등)만 여기로 와서 sdk.van.write 로 그대로 전달.
+  //   · VAN 응답은 VAN 모듈이 단말기로 직접 회신한다(우리 반환 경로 불필요 — 토스 확인).
+  function onVanForward(bytes: Uint8Array): void {
+    if (!van) return;
+    van.write(bytes).catch((e) => console.error("[SocketGateway] van.write 실패", e));
   }
 
   // ── 외부 API ─────────────────────────────────
 
+  // ⚠️ 진단용 — start() 가 여러 번 호출되면 카운트가 올라간다.
+  // 정상 케이스: 앱 lifecycle 하나에 딱 1번 호출되어야 한다.
+  let startCallCount = 0;
+
   async function start(): Promise<void> {
+    startCallCount++;
+    console.log(`[SocketGateway] start() 호출 #${startCallCount} (기존 ws=${ws ? "있음" : "없음"}, ser=${ser ? "있음" : "없음"}, van=${van ? "있음" : "없음"})`);
     ws = createWebSocketTransport({
       onText:  onCatText,
       onError: (e) => console.error("[SocketGateway] websocket error", e),
     });
     ser = createSerialTransport({
-      onFrame: onSerialFrame,
+      onFrame:      onSerialFrame,  // TRM(팜포인트) 완성 프레임 → 우리 처리
+      onVanForward: onVanForward,   // TRM 아닌 원본(KIS 등) → VAN 중계
       onError: (e) => console.error("[SocketGateway] serial error", e),
     });
-    await Promise.allSettled([ws.start(), ser.start()]);
+    van = createVanTransport(); // KIS 전문 → VAN 전달 (write only)
+    // allSettled 는 실패를 삼키므로, 어느 채널이 못 떴는지 반드시 로그로 남긴다.
+    const [wsRes, serRes] = await Promise.allSettled([ws.start(), ser.start()]);
+    if (wsRes.status  === "rejected") console.error("[SocketGateway] ❌ websocket start 실패", wsRes.reason);
+    if (serRes.status === "rejected") console.error("[SocketGateway] ❌ serial start 실패",    serRes.reason);
   }
 
   async function stop(): Promise<void> {
+    van = null;
     await Promise.allSettled([
       ws  ? ws.stop()  : Promise.resolve(),
       ser ? ser.stop() : Promise.resolve(),
@@ -175,19 +247,30 @@ function create() {
 
   // ── 단말기(TRM) 응답 송신 ───────────────────
 
-  function sendTerminal(bytes: Uint8Array): Promise<void> {
-    if (!ser) return Promise.resolve();
-    return ser.send(bytes);
+  function sendTerminal(bytes: Uint8Array, label: string): Promise<void> {
+    if (!ser) {
+      console.warn(`[SocketGateway] ⚠️ ${label} 송신 불가 — 시리얼 미기동(ser=null)`);
+      return Promise.resolve();
+    }
+    console.log(`[SocketGateway] => ${label} ${toHex(bytes)}`);
+    return ser.send(bytes).catch((e) => {
+      console.error(`[SocketGateway] ❌ ${label} 송신 실패`, e);
+    });
   }
 
   /** 004 — 포인트 사용 결과 */
   function sendTerminalUsePoint(phone: string, balance: string, delta: string): Promise<void> {
-    return sendTerminal(TerminalCodec.makeUsePoint(phone, balance, delta));
+    return sendTerminal(TerminalCodec.makeUsePoint(phone, balance, delta), "004(사용결과)");
+  }
+
+  /** 006 — 바코드 표시 응답 (005 수신 즉시 회신) */
+  function sendTerminalBarcodeAck(code = "0000"): Promise<void> {
+    return sendTerminal(TerminalCodec.makeBarcodeDisplayAck(code), `006(바코드응답 ${code})`);
   }
 
   /** 010 — 진행중 취소 (INIT) */
   function sendTerminalInit(): Promise<void> {
-    return sendTerminal(TerminalCodec.makeInit());
+    return sendTerminal(TerminalCodec.makeInit(), "010(취소/INIT)");
   }
 
   return {
@@ -196,7 +279,7 @@ function create() {
     sendCATOk, sendCATPhoneNumber, sendCATCustomerInfo, sendCATFail,
     sendCATUsePointResult, sendCATUsePointWithCustomerResult, sendCATMarketingConsent,
     // TRM
-    sendTerminalUsePoint, sendTerminalInit,
+    sendTerminalUsePoint, sendTerminalInit, sendTerminalBarcodeAck,
     // CAT session 상태 (read-only)
     isCatSessionActive: () => catSessionActive,
   };

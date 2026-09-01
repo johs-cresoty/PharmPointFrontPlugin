@@ -26,7 +26,7 @@ export type PhoneOverlayHandles = {
 export function mountPhoneOverlay(opts: {
   hint?:      string;
   storeName?: string;
-  appMode?:  "always-overlay" | "phone-overlay-on";
+  appMode?:  "always-overlay" | "phone-overlay-on" | "minimal-overlay";
   agreement?: boolean; // 개인정보 동의 체크박스 표시 (기본 true)
 }): PhoneOverlayHandles {
   const {
@@ -41,7 +41,7 @@ export function mountPhoneOverlay(opts: {
   header.innerHTML = `
     <button class="header-back" data-role="back" aria-label="뒤로 가기">←</button>
     ${storeName ? `<p class="header-store">${escapeHtml(storeName)}</p>` : ""}
-    <p class="header-hint">${escapeHtml(hint)}</p>
+    ${hint ? `<p class="header-hint">${escapeHtml(hint)}</p>` : ""}
   `;
 
   const footer = document.createElement("footer");
@@ -92,6 +92,8 @@ export function mountPhoneOverlay(opts: {
 export type PayHeaderHandles = {
   root:     HTMLElement;
   setAmount(text: string): void;
+  /** 결제금액 h1 을 완전히 숨김(display:none) — SDK subtitle 로 이관한 화면용. */
+  hideAmount(): void;
   setEstimate(text: string): void;
   hideEstimate(): void;
   remove(): void;
@@ -108,7 +110,7 @@ export function mountPayHeader(opts: {
     <button class="header-back" data-role="back" aria-label="뒤로 가기">←</button>
     <h1 class="header-amount" data-role="amount">&nbsp;</h1>
     ${opts.showEstimate ? `
-      <div class="header-estimate-row" data-role="estimate-row">
+      <div class="header-estimate-row" data-role="estimate-row" style="visibility:hidden">
         <span class="header-estimate">
           <span class="header-estimate-icon">₩</span>
           <span data-role="estimate-text">0P 적립예상</span>
@@ -130,8 +132,15 @@ export function mountPayHeader(opts: {
   return {
     root: header,
     setAmount(text)   { amountEl.textContent = text; },
-    setEstimate(text) { if (estimateText) estimateText.textContent = text; },
-    hideEstimate()    { if (estimateRow) estimateRow.style.display = "none"; },
+    // amount 는 문서 흐름에서 완전 제거 — 오버레이 상단 세로 공간을 SDK subtitle 이 대신 채운다.
+    hideAmount()      { if (amountEl) amountEl.style.display = "none"; },
+    // 배지는 기본 숨김(visibility) 상태로 시작한다 — 유효한 예상 포인트가 왔을 때만 노출.
+    // display 가 아닌 visibility 를 쓰는 이유: 숨겨도 영역 높이를 유지해 아래 레이아웃이 밀리지 않게 함.
+    setEstimate(text) {
+      if (estimateText) estimateText.textContent = text;
+      if (estimateRow)  estimateRow.style.visibility = "visible";
+    },
+    hideEstimate()    { if (estimateRow) estimateRow.style.visibility = "hidden"; },
     remove(): void {
       header.remove();
       document.getElementById("app")?.classList.remove("always-overlay");

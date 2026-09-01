@@ -11,7 +11,10 @@ export const SocketConstants = {
   TERMINAL_COMMAND_002: "002", // TRM → PAD : 포인트 적립(복합)
   TERMINAL_COMMAND_003: "003", // TRM → PAD : 포인트 사용 요청
   TERMINAL_COMMAND_004: "004", // TRM ← PAD : 포인트 사용 응답
+  TERMINAL_COMMAND_005: "005", // TRM → PAD : 바코드 표시 요청
+  TERMINAL_COMMAND_006: "006", // TRM ← PAD : 바코드 표시 응답
   TERMINAL_COMMAND_010: "010", // PAD → TRM : 취소
+  TERMINAL_COMMAND_999: "999", // TRM → PAD : 화면 미노출(팜포인트 화면 종료). 응답 전문 없음(ACK 만)
 
   // ── 캣포스(CAT) 수신 커맨드 (PC → PAD) ────────────
   CATPOS_CONNECT:                     "CONNECT",
@@ -25,6 +28,9 @@ export const SocketConstants = {
   CATPOS_MARKETING_CONSENT_REQ:       "MARKETING_CONSENT_REQ",
   CATPOS_SESSION_START:               "SESSION_START",
   CATPOS_SESSION_END:                 "SESSION_END",
+  // 고객 가격표시기 (catpos-cart-display-spec.md)
+  CATPOS_CART_UPDATE:                 "CART_UPDATE",           // POS → PAD : 카트 스냅샷 갱신
+  CATPOS_CART_CLEAR:                  "CART_CLEAR",            // POS → PAD : 결제 개시 직전 종료
 
   // ── 캣포스(CAT) 송신 커맨드 (PAD → PC) ────────────
   CATPOS_CONNECT_ACK:                 "CONNECT_ACK",

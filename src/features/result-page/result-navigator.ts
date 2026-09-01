@@ -16,7 +16,7 @@ const DEFAULT_HOME = "/";
 export type ResultCtxData = Record<string, unknown>;
 
 export type ResultCtx = {
-  type: "earn" | "use" | "insufficient" | "lookup";
+  type: "earn" | "use" | "insufficient" | "payAmountBelowMinPoint" | "lookup";
   data: ResultCtxData;
   onTimeoutHref: string;
 };
@@ -57,6 +57,20 @@ export function goInsufficient(args: {
   commit({
     type: "insufficient",
     data: { storeName: args.storeName, minPoint: args.minPoint, balancePoint: args.balancePoint },
+    onTimeoutHref: args.onTimeoutHref ?? DEFAULT_HOME,
+  });
+}
+
+/**
+ * 결제금액 < 최소 사용 포인트 사전 차단 결과로 이동.
+ * (휴대폰 번호 입력 전 판정 케이스 — 잔액 조회 없음, storeName/balancePoint 없음)
+ */
+export function goPayAmountBelowMinPoint(args: {
+  payAmount: number; minPoint: number; onTimeoutHref?: string;
+}): void {
+  commit({
+    type: "payAmountBelowMinPoint",
+    data: { payAmount: args.payAmount, minPoint: args.minPoint },
     onTimeoutHref: args.onTimeoutHref ?? DEFAULT_HOME,
   });
 }

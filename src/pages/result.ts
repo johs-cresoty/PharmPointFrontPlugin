@@ -9,6 +9,7 @@ import {
   showEarnSuccess,
   showUseSuccess,
   showInsufficientPoint,
+  showPayAmountBelowMinPoint,
   showLookupSuccess,
   showLookupFail,
   type ResultButton,
@@ -69,6 +70,14 @@ export function renderResult(): void {
         storeName:    str(d.storeName),
         minPoint:     num(d.minPoint),
         balancePoint: num(d.balancePoint),
+        onTimeout: goHome, buttons: [homeButton],
+      }).finally(reveal);
+      return;
+
+    case "payAmountBelowMinPoint":
+      void showPayAmountBelowMinPoint({
+        payAmount: num(d.payAmount),
+        minPoint:  num(d.minPoint),
         onTimeout: goHome, buttons: [homeButton],
       }).finally(reveal);
       return;
