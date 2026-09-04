@@ -187,13 +187,7 @@ function create() {
 
   // ── 외부 API ─────────────────────────────────
 
-  // ⚠️ 진단용 — start() 가 여러 번 호출되면 카운트가 올라간다.
-  // 정상 케이스: 앱 lifecycle 하나에 딱 1번 호출되어야 한다.
-  let startCallCount = 0;
-
   async function start(): Promise<void> {
-    startCallCount++;
-    console.log(`[SocketGateway] start() 호출 #${startCallCount} (기존 ws=${ws ? "있음" : "없음"}, ser=${ser ? "있음" : "없음"}, van=${van ? "있음" : "없음"})`);
     ws = createWebSocketTransport({
       onText:  onCatText,
       onError: (e) => console.error("[SocketGateway] websocket error", e),

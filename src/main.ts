@@ -74,18 +74,7 @@ function isSettingsEntry(): boolean {
   return location.pathname.endsWith("/settings.html");
 }
 
-// ⚠️ 진단용 — 리스너 leak 원인 규명. bootstrap 이 여러 번 호출되면 카운트가 올라간다.
-// 정상 케이스: 앱 lifecycle 하나에 딱 1번 호출되어야 한다.
-let bootstrapCallCount = 0;
-
 async function bootstrap(): Promise<void> {
-  bootstrapCallCount++;
-  console.log(`[main] bootstrap() 호출 #${bootstrapCallCount}`);
-  // 진단: Toss 관리자가 실제로 어떤 URL 로 진입하는지 확인 (settings.html vs 다른 경로)
-  console.log(`[main] entry pathname=${location.pathname} hash=${location.hash}`);
-  // 배포 표식 — 실단말에 올라간 번들이 최신인지 로그로 즉시 판별하기 위함.
-  console.log("[main] BUILD=diag-leak-1 (부트스트랩/SocketGateway/WSTransport 호출 카운터)");
-
   await ensureInit();
 
   try {
