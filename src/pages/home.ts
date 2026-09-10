@@ -228,10 +228,16 @@ function renderCustomerLookup(): void {
 
 const MARKETING_OPTIONAL_ID = "marketing"; // 선택(마케팅) 동의 항목 id — 체크 여부 판별용
 
-// 약관 상세 페이지 — public/ 의 정적 HTML. SDK 가 href 를 바텀시트로 띄운다.
-// 배포 산출물이 flat 구조(하위 폴더 미지원)라 파일명으로 구분한다.
+// 약관 상세 페이지 — 저장소 agreements/ 를 Cloudflare Pages 로 배포한 주소.
+//
+// ⚠️ 플러그인 자기 도메인(cresoty-pharmpoint.plugin.tossplace.com)에 두면 안 된다.
+//    SDK 가 항목을 shell.openExternal 로 외부 브라우저에 넘기는데, 그 브라우저에서는
+//    플러그인 도메인이 풀리지 않아 ERR_NAME_NOT_RESOLVED 가 난다.
+//    (settings.html 의 리다이렉트가 같은 이유로 실패했던 것과 동일한 제약)
+//    따라서 공개 DNS 로 접근 가능한 호스트여야 한다.
+//
 // 문구는 '팜포인트 회원 동의 폼 v1.0' 원본을 옮긴 것이므로, 개정 시 두 파일을 함께 고친다.
-const AGREEMENT_ORIGIN        = "https://cresoty-pharmpoint.plugin.tossplace.com";
+const AGREEMENT_ORIGIN        = "https://pharmpoint-agreements.pages.dev";
 const PRIVACY_AGREEMENT_URL   = `${AGREEMENT_ORIGIN}/agreement-privacy.html`;
 const MARKETING_AGREEMENT_URL = `${AGREEMENT_ORIGIN}/agreement-marketing.html`;
 
