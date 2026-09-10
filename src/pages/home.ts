@@ -298,11 +298,27 @@ function renderMarketingAgreement(phone: string): void {
   });
 }
 
+/**
+ * 현재 Home 뷰가 대기화면인지. 입력·약관 서브뷰가 떠 있으면 false.
+ *
+ * Home 은 경로가 "/" 하나인데 대기화면·번호 입력·고객 조회·마케팅 동의를 모두 담고 있어,
+ * 경로만으로는 고객이 조작 중인지 알 수 없다. 가격표시기 전환처럼 대기 상태에서만
+ * 허용해야 하는 처리에서 이 값을 확인한다.
+ */
+export function isIdleActive(): boolean {
+  return idleActive;
+}
+
 // ─── 진입점 (라우터 등록용) ────────────
 
 export async function renderHome(): Promise<void> {
   const mode = sessionStorage.getItem(CAT_REQ_KEY);
   sessionStorage.removeItem(CAT_REQ_KEY);
+
+  // 입력 서브뷰로 갈 것이 확정된 시점에 먼저 내려둔다.
+  // 아래 await 동안에도 소켓 콜백은 계속 도는데, 그때까지 대기화면으로 보이면
+  // 그 사이 도착한 카트가 아직 뜨지도 않은 입력 화면을 가격표시기로 덮어쓴다.
+  if (mode) idleActive = false;
 
   // 입력 서브뷰 무동작 타임아웃 duration = 설정값 (미리 로드, 실패 시 기본 30초 유지).
   try { inactivityDuration = await getInactivityTimeoutSeconds(); }

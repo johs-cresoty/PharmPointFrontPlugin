@@ -12,7 +12,7 @@ import { start as startAppSession, setConfig as setAppConfig, stop as stopAppSes
 import { getPointUseConfig } from "./features/app-config/app-config.service";
 import { getCurrentPath, navigate, register, start as startRouter } from "./router";
 
-import { renderHome } from "./pages/home";
+import { renderHome, isIdleActive } from "./pages/home";
 import { renderMemberSearch } from "./pages/member-search";
 import { renderPointEarnFlow, isTerminalEarnContext, clearEarnContext } from "./pages/point-earn-flow";
 import { renderPointUseFlow, isTerminalUseContext, clearUseContext } from "./pages/point-use-flow";
@@ -125,12 +125,24 @@ async function bootstrap(): Promise<void> {
         if (getCurrentPath() === "/price-display") navigate("/");
         return;
       }
-      saveCart(cart); // 라우터 진입 시 초기 렌더용 스냅샷 보관
       if (getCurrentPath() === "/price-display") {
+        saveCart(cart);           // 라우터 재진입 시 초기 렌더용 스냅샷 보관
         updatePriceDisplay(cart); // 이미 진입 상태 → 실시간 갱신
-      } else {
-        navigate("/price-display"); // 첫 수신 → 진입 (renderPriceDisplay 가 스냅샷 로드)
+        return;
       }
+      // 고객이 조작 중인 화면(번호 입력·포인트 입력·약관 동의·결과·환경설정 등)에서는
+      // 카트를 반영하지 않는다. 반영하면 결제 중 직원이 상품을 추가 스캔할 때
+      // 고객이 입력하던 화면이 가격표시기로 바뀌어 흐름이 끊긴다.
+      //
+      // Home("/")은 대기화면과 입력 서브뷰를 한 경로에서 처리하므로 경로만으로는
+      // 판별할 수 없다 → isIdleActive() 로 대기 상태인지 확인한다.
+      const path = getCurrentPath();
+      if (path !== "/" || !isIdleActive()) {
+        console.log(`[main] 고객 조작 화면 진행 중 — 카트 갱신 무시 (path=${path})`);
+        return;
+      }
+      saveCart(cart);             // renderPriceDisplay 가 읽을 스냅샷
+      navigate("/price-display"); // 대기 상태에서 첫 수신 → 가격표시기 진입
     },
     // 단말기 005 — 바코드 표시. (006 회신은 AppSession 이 수신 즉시 처리)
     onBarcodeDisplay: (barcode) => {
