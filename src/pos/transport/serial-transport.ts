@@ -49,6 +49,35 @@ function isDigit(b: number): boolean {
   return b >= 0x30 && b <= 0x39;
 }
 
+// ── 연동 상태 로그 ──────────────────────────────
+//
+// 단말기는 결제모듈용 폴링 전문을 수 초 간격으로 계속 보낸다. 프레임마다 hex 를 남기면
+// 똑같은 줄로 로그가 가득 차서 정작 봐야 할 팜포인트 전문이 묻힌다.
+// 그래서 여기서는 두 가지만 남긴다.
+//   1) 연동이 살아있는지 — 상태가 바뀌는 시점과 일정 주기
+//   2) 전문 내용 — 직전과 다른 전문일 때만 (같은 전문 반복은 횟수로 접음)
+
+/** 신호가 이 시간 동안 끊기면 연결이 끊긴 것으로 본다. */
+const LINK_IDLE_MS = 15_000;
+/** 연동이 살아있는 동안 남기는 상태 로그 주기. */
+const LINK_ALIVE_LOG_MS = 60_000;
+
+/**
+ * 같은 줄이 반복되면 접어서 횟수로만 알리는 로거.
+ * 반복이 끝나 다른 줄이 나올 때 "N회 반복" 을 먼저 흘리고 새 줄을 찍는다.
+ */
+function createFoldedLogger(): (line: string) => void {
+  let lastLine = "";
+  let repeat   = 0;
+  return (line: string): void => {
+    if (line === lastLine) { repeat += 1; return; }
+    if (repeat > 0) console.log(`[serial] ↑ 같은 전문 ${repeat}회 반복`);
+    console.log(`[serial] ${line}`);
+    lastLine = line;
+    repeat   = 0;
+  };
+}
+
 /**
  * SDK 호출이 응답하지 않고 멈추는 경우가 있어(실단말 sdk.serial.open 무응답 관측),
  * 정리 경로에서는 반드시 시간 제한을 걸어 다음 단계로 넘어간다.
@@ -103,6 +132,42 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
     onUnload:  null as (() => void) | null,
   };
 
+  // 단말기 신호 생존 상태. 전문 내용과 무관하게 '뭐라도 들어오는가'만 본다.
+  const link = {
+    alive:        false,
+    rxSinceLog:   0,
+    lastAliveLog: 0,
+    watchdog:     null as ReturnType<typeof setTimeout> | null,
+  };
+
+  const logRx  = createFoldedLogger();
+  const logVan = createFoldedLogger();
+
+  /** 수신이 있을 때마다 호출. 연동 시작·유지·끊김을 한 줄씩만 남긴다. */
+  function noteSignal(): void {
+    const now = Date.now();
+    link.rxSinceLog += 1;
+
+    if (!link.alive) {
+      link.alive        = true;
+      link.lastAliveLog = now;
+      link.rxSinceLog   = 1;
+      console.log("[연동] ✅ 단말기 신호 수신 — 시리얼 연결 정상");
+    } else if (now - link.lastAliveLog >= LINK_ALIVE_LOG_MS) {
+      const sec = Math.round((now - link.lastAliveLog) / 1000);
+      console.log(`[연동] 단말기 신호 유지 중 — 최근 ${sec}초간 ${link.rxSinceLog}건 수신`);
+      link.lastAliveLog = now;
+      link.rxSinceLog   = 0;
+    }
+
+    if (link.watchdog) clearTimeout(link.watchdog);
+    link.watchdog = setTimeout(() => {
+      link.watchdog = null;
+      link.alive    = false;
+      console.warn(`[연동] ⚠️ 단말기 신호 끊김 — ${LINK_IDLE_MS / 1000}초간 수신 없음`);
+    }, LINK_IDLE_MS);
+  }
+
   function appendBuffer(chunk: Uint8Array): void {
     const merged = new Uint8Array(state.buffer.length + chunk.length);
     merged.set(state.buffer, 0);
@@ -114,9 +179,18 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
     if (bytes.length === 0) return;
     // TRM 으로 인식되지 않아 VAN 으로 넘기는 구간. 팜포인트 전문이 여기로 새면
     // 게이트웨이까지 못 가므로, 어디로 빠졌는지 반드시 보이게 남긴다.
-    console.log(`[serial] -> VAN 중계 (${bytes.length} bytes) ${toHex(bytes)}`);
+    // 팜포인트 전문 조건(STX + "XX" + 숫자4)을 어디서 벗어났는지 함께 적어,
+    // 결제 전문이라 넘긴 것인지 팜포인트 전문이 마커 없이 와서 샌 것인지 구분한다.
+    logVan(`-> 결제모듈(VAN) 전달 — ${vanReason(bytes)} (${bytes.length} bytes) ${toHex(bytes)}`);
     try { onVanForward?.(bytes); }
     catch (e) { onError?.(e); }
+  }
+
+  /** VAN 으로 넘기는 이유를 사람이 읽을 수 있게. */
+  function vanReason(bytes: Uint8Array): string {
+    if (bytes[0] !== C.COMM_STX)                    return "STX 로 시작하지 않음";
+    if (bytes[1] !== XX || bytes[2] !== XX)         return "팜포인트 마커 \"XX\" 없음";
+    return "길이 헤더 형식 불일치";
   }
 
   // 수신 타임아웃 — 미완성 잔여가 오래 남으면 KIS 잔여로 간주해 VAN 으로 흘려보낸다.
@@ -263,9 +337,12 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
       const chunk = params?.data;
       if (!chunk || chunk.length === 0) return;
       const u8 = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
+      // 연동 생존 신호 — 전문 종류와 무관하게 뭐라도 들어오면 연결은 살아있는 것이다.
+      noteSignal();
       // 시리얼로 들어온 원본 chunk — TRM/KIS 판별 전 단계. 단말기가 보낸 건 전부 여기 찍힌다.
       // 길이는 hex 와 헷갈리지 않게 괄호로 분리한다 ("5B" 를 0x5B 로 오독하는 것 방지).
-      console.log(`[serial] <= RX (${u8.length} bytes) ${toHex(u8)}`);
+      // 반복되는 폴링 전문은 접어서 횟수로만 남긴다.
+      logRx(`<= RX (${u8.length} bytes) ${toHex(u8)}`);
       try {
         appendBuffer(u8);
         processBuffer(); // TRM → onFrame, KIS → onVanForward
@@ -283,7 +360,9 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
     // opened 가 아니어도 '열기를 시도했다면' 반드시 close 를 태운다.
     // (open 무응답 시 opened 가 false 로 남아, 예전에는 close 가 아예 호출되지 않았다 → 포트 누수)
     if (!state.opened && !state.attempted) return;
-    if (state.idleTimer) { clearTimeout(state.idleTimer); state.idleTimer = null; }
+    if (state.idleTimer)  { clearTimeout(state.idleTimer);  state.idleTimer  = null; }
+    if (link.watchdog)    { clearTimeout(link.watchdog);    link.watchdog    = null; }
+    link.alive = false;
     unregisterUnloadClose();
     try { state.unlisten?.(); } catch { /* noop */ }
     state.unlisten = null;

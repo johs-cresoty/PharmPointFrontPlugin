@@ -109,6 +109,8 @@ function create() {
   let ws:  WebSocketTransport | null = null;
   let ser: SerialTransport    | null = null;
   let van: VanTransport       | null = null;
+  // 팜포인트 전문이 한 번이라도 도착했는지. 연동 성립을 1회만 알리기 위한 표식.
+  let trmLinkConfirmed = false;
 
   // ── CATPOS JSON 수신 처리 ──────────────────────
   function onCatText(text: string): void {
@@ -128,6 +130,12 @@ function create() {
   // ── TERMINAL(팜포인트 TRM) 프레임 수신 처리 ─────────
   // KIS 전문은 여기까지 오지 않는다(SerialTransport 라우터가 TRM 만 넘기고, KIS 는 onVanForward→VAN).
   function onSerialFrame(frame: Uint8Array): void {
+    // 팜포인트 전문이 실제로 도착한 첫 순간. 여기까지 왔다는 것은 시리얼 연결뿐 아니라
+    // 전문 형식(마커·플래그)까지 맞았다는 뜻이라, 연동 성립 시점으로 한 번만 남긴다.
+    if (!trmLinkConfirmed) {
+      trmLinkConfirmed = true;
+      console.log("[연동] ✅ 팜포인트 전문 최초 수신 — 단말기 연동 확인");
+    }
     // 진입 즉시 원문부터 남긴다 — 아래 어느 분기로 빠지든(세션 차단·파싱 실패·미지원 커맨드)
     // 단말기가 실제로 뭘 보냈는지는 항상 확인 가능해야 한다.
     console.log(`[SocketGateway] <= TRM RAW (${frame.length} bytes) ${toHex(frame)}`);
@@ -202,10 +210,17 @@ function create() {
     const [wsRes, serRes] = await Promise.allSettled([ws.start(), ser.start()]);
     if (wsRes.status  === "rejected") console.error("[SocketGateway] ❌ websocket start 실패", wsRes.reason);
     if (serRes.status === "rejected") console.error("[SocketGateway] ❌ serial start 실패",    serRes.reason);
+    // 두 채널 기동 결과를 한 줄로 모아둔다. 여러 줄에 흩어진 로그를 훑지 않아도
+    // 어느 쪽이 못 떴는지 바로 보이게 하기 위함.
+    console.log(
+      `[연동] 채널 기동 — POS(웹소켓) ${wsRes.status === "fulfilled" ? "정상" : "실패"} · ` +
+      `단말기(시리얼) ${serRes.status === "fulfilled" ? "정상" : "실패"}`,
+    );
   }
 
   async function stop(): Promise<void> {
     van = null;
+    trmLinkConfirmed = false;
     await Promise.allSettled([
       ws  ? ws.stop()  : Promise.resolve(),
       ser ? ser.stop() : Promise.resolve(),
