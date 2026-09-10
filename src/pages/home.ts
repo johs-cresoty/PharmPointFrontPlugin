@@ -236,10 +236,14 @@ const MARKETING_OPTIONAL_ID = "marketing"; // 선택(마케팅) 동의 항목 id
 //    (settings.html 의 리다이렉트가 같은 이유로 실패했던 것과 동일한 제약)
 //    따라서 공개 DNS 로 접근 가능한 호스트여야 한다.
 //
-// 문구는 '팜포인트 회원 동의 폼 v1.0' 원본을 옮긴 것이므로, 개정 시 두 파일을 함께 고친다.
+// ⚠️ 확장자(.html)를 붙이지 않는다. Cloudflare Pages 가 .html 요청을 확장자 없는 주소로
+//    308 리다이렉트하는데, 그 리다이렉트가 토스 ACL 검사에 걸려 Access Denied 가 뜬다.
+//    확장자 없는 주소는 리다이렉트 없이 200 으로 바로 응답한다.
+//
+// 문구는 '팜포인트 회원 동의 폼' 원본을 옮긴 것이므로, 개정 시 두 파일을 함께 고친다.
 const AGREEMENT_ORIGIN        = "https://pharmpoint-agreements.pages.dev";
-const PRIVACY_AGREEMENT_URL   = `${AGREEMENT_ORIGIN}/agreement-privacy.html`;
-const MARKETING_AGREEMENT_URL = `${AGREEMENT_ORIGIN}/agreement-marketing.html`;
+const PRIVACY_AGREEMENT_URL   = `${AGREEMENT_ORIGIN}/agreement-privacy`;
+const MARKETING_AGREEMENT_URL = `${AGREEMENT_ORIGIN}/agreement-marketing`;
 
 function renderMarketingConsent(): void {
   removeStoreNameOverlay();
