@@ -286,6 +286,10 @@ function renderMarketingConsent(): void {
 
 function renderMarketingAgreement(phone: string): void {
   armTimeout();
+  // 약관 항목을 눌렀을 때 SDK 가 실제로 어떤 주소를 여는지 남긴다.
+  // ACL 차단(Access Denied)이 떴을 때, 단말에 올라간 번들이 옛 주소를 들고 있는 것인지
+  // 주소는 맞는데 ACL 에서 막는 것인지 로그만 보고 가릴 수 있어야 한다.
+  console.log(`[Home] 약관 링크 — 필수=${PRIVACY_AGREEMENT_URL} 선택=${MARKETING_AGREEMENT_URL}`);
   sdk.template.renderAgreementPage({
     title:    "약관에 동의해 주세요",
     subtitle: "",
