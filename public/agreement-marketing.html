@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>마케팅 수신 동의</title>
+
+    <!--
+      renderAgreementPage 의 선택 동의 항목("마케팅 수신 동의") href 대상.
+      SDK 가 이 페이지를 바텀시트로 띄운다.
+
+      내용은 '팜포인트 회원 동의 폼 v1.0' 의 상세보기 화면 중 선택 동의(Ⅱ)와,
+      마케팅 발송 대행 근거인 위탁 안내(Ⅲ)·정보주체의 권리(Ⅳ)를 옮긴 것이다.
+      한쪽만 열어도 내용이 완결되도록 Ⅲ·Ⅳ 는 필수 동의 페이지와 같은 문구를 싣는다.
+      문구를 고칠 일이 생기면 원본 동의 폼을 먼저 개정하고 두 페이지에 함께 반영한다.
+
+      global.css 는 싣지 않는다 — body 를 400x640 으로 고정해 스크롤이 막힌다.
+    -->
+    <style>
+      :root {
+        --ink: #191f28;
+        --ink-soft: #4e5968;
+        --ink-faint: #8b95a1;
+        --line: #e5e8eb;
+        --field-bg: #f9fafb;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        font-family: "Toss Product Sans", -apple-system, "Malgun Gothic", sans-serif;
+        color: var(--ink);
+        background: #fff;
+        padding: 20px 20px 40px;
+        line-height: 1.6;
+        -webkit-text-size-adjust: 100%;
+      }
+
+      h1 { font-size: 19px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.2px; }
+      .lede { font-size: 13px; color: var(--ink-faint); margin: 0 0 22px; }
+
+      section { margin-bottom: 24px; }
+      .sec-num { font-size: 12px; font-weight: 700; color: var(--ink-faint); margin-bottom: 3px; }
+      h2 { font-size: 15px; font-weight: 700; margin: 0 0 9px; letter-spacing: -0.2px; }
+
+      /* 항목명 + 내용 — 좁은 화면이라 표 대신 세로 구조로 쌓는다. */
+      dl { margin: 0; border-top: 1px solid var(--line); }
+      dt {
+        font-size: 12.5px; font-weight: 600; color: var(--ink-soft);
+        background: var(--field-bg); padding: 7px 10px; border-bottom: 1px solid var(--line);
+      }
+      dd {
+        margin: 0; font-size: 13px; color: var(--ink); padding: 9px 10px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .plain { font-size: 13px; color: var(--ink); margin: 0; }
+      .contact {
+        font-size: 12.5px; color: var(--ink-soft); background: var(--field-bg);
+        border-radius: 10px; padding: 12px 13px; margin-top: 4px;
+      }
+      .contact b { color: var(--ink); font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <h1>마케팅 정보 수신 동의</h1>
+    <p class="lede">팜포인트 회원 동의 폼 v1.0 · 선택 항목</p>
+
+    <section>
+      <div class="sec-num">Ⅱ. 선택 동의</div>
+      <h2>마케팅 정보 수신 및 활용</h2>
+      <dl>
+        <dt>목적</dt>
+        <dd>
+          프로모션 · 이벤트 · 할인 쿠폰 안내
+          (약국 명의로 SMS/알림톡 발송, ㈜크레소티가 발송 대행)
+        </dd>
+        <dt>항목</dt>
+        <dd>휴대폰번호</dd>
+        <dt>보유기간</dt>
+        <dd>동의 철회 시 또는 회원 탈퇴 시까지</dd>
+        <dt>거부권</dt>
+        <dd>
+          미동의 시에도 포인트 적립 서비스는 그대로 이용 가능합니다.
+          위 정보는 정보통신망법상 광고성 정보에 해당하며, 수신 동의 후에도 언제든 거부할 수 있습니다.
+        </dd>
+      </dl>
+    </section>
+
+    <section>
+      <div class="sec-num">Ⅲ. 처리 위탁 안내</div>
+      <h2>개인정보 처리업무 위탁</h2>
+      <dl>
+        <dt>수탁업체</dt>
+        <dd>㈜크레소티</dd>
+        <dt>위탁업무</dt>
+        <dd>
+          팜포인트(CATPOS 부가서비스) 적립·사용·조회·관리 시스템 개발, 운영 및 유지보수 /
+          팜페이 앱을 통한 회원 본인의 포인트 조회 기능 제공 /
+          회원의 별도 동의가 있는 경우 약국 명의 프로모션 등 마케팅 정보 발송 대행
+        </dd>
+        <dt>보유기간</dt>
+        <dd>위탁계약(이용약관) 효력 존속 기간까지, 종료 시 지체 없이 파기 또는 반환</dd>
+      </dl>
+    </section>
+
+    <section>
+      <div class="sec-num">Ⅳ. 정보주체의 권리</div>
+      <p class="plain">
+        고객은 개인정보 열람·정정·삭제·처리정지·동의철회를 언제든지 요구할 수 있으며,
+        요구 시 지체 없이 조치합니다.
+      </p>
+    </section>
+
+    <p class="contact"><b>문의</b> · 해당 가맹약국 또는 크레소티 고객센터</p>
+  </body>
+</html>
