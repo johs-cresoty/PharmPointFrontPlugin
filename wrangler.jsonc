@@ -1,0 +1,16 @@
+{
+  // 약관 페이지 배포 전용 설정 (Cloudflare Workers 정적 자산).
+  //
+  // 토스 플러그인 자체는 이 설정과 무관하다 — 플러그인은 dist/ 를 압축해
+  // 토스 개발자센터에 올린다. 여기서 배포하는 건 agreements/ 뿐이다.
+  //
+  // 약관을 왜 따로 배포하는지는 agreements/README.md 참고.
+  // (SDK 가 shell.openExternal 로 외부 브라우저를 열어서, 플러그인 도메인은 못 쓴다)
+  //
+  // 스크립트 없이 assets 만 지정하면 정적 파일 서버로만 동작한다.
+  "name": "pharmpoint-agreements",
+  "compatibility_date": "2026-09-10",
+  "assets": {
+    "directory": "./agreements"
+  }
+}
