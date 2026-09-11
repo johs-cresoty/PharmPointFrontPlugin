@@ -136,7 +136,7 @@ function create() {
     // 전문 형식(마커·플래그)까지 맞았다는 뜻이라, 연동 성립 시점으로 한 번만 남긴다.
     if (!trmLinkConfirmed) {
       trmLinkConfirmed = true;
-      log.info("[연동] ✅ 팜포인트 전문 최초 수신 — 단말기 연동 확인");
+      log.status("[연동] ✅ 팜포인트 전문 최초 수신 — 단말기 연동 확인");
     }
 
     if (catSessionActive) {
@@ -206,11 +206,11 @@ function create() {
     van = createVanTransport(); // KIS 전문 → VAN 전달 (write only)
     // allSettled 는 실패를 삼키므로, 어느 채널이 못 떴는지 반드시 로그로 남긴다.
     const [wsRes, serRes] = await Promise.allSettled([ws.start(), ser.start()]);
-    if (wsRes.status  === "rejected") console.error("[SocketGateway] ❌ websocket start 실패", wsRes.reason);
-    if (serRes.status === "rejected") console.error("[SocketGateway] ❌ serial start 실패",    serRes.reason);
+    if (wsRes.status  === "rejected") console.error("[연동] ❌ 웹소켓 서버 기동 실패 — 캣포스가 접속할 수 없다", wsRes.reason);
+    if (serRes.status === "rejected") console.error("[연동] ❌ 시리얼 기동 실패 — 단말기 전문을 받을 수 없다", serRes.reason);
     // 두 채널 기동 결과를 한 줄로 모아둔다. 여러 줄에 흩어진 로그를 훑지 않아도
     // 어느 쪽이 못 떴는지 바로 보이게 하기 위함.
-    log.info(
+    log.status(
       `[연동] 채널 기동 — POS(웹소켓) ${wsRes.status === "fulfilled" ? "정상" : "실패"} · ` +
       `단말기(시리얼) ${serRes.status === "fulfilled" ? "정상" : "실패"}`,
     );

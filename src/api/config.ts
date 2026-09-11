@@ -34,8 +34,11 @@ export const API_BASE_URL = API_HOSTS[API_TARGET];
 /** 기동 로그·진단용 — 지금 어느 서버를 보고 있는지. */
 export const API_ENV_LABEL = API_LABELS[API_TARGET];
 
-/** axios baseURL — dev 는 vite proxy 우회를 위해 비움. */
-export const AXIOS_BASE_URL = import.meta.env.DEV ? "" : API_BASE_URL;
+/**
+ * axios baseURL — 개발 서버에서만 비운다(vite proxy 로 CORS 우회).
+ * build:verbose 는 실제 배포본이므로 proxy 가 없다 → 절대 주소를 써야 한다.
+ */
+export const AXIOS_BASE_URL = __DEV_PROXY__ ? "" : API_BASE_URL;
 
 /** 단말기 식별 공통 쿼리값 (PharmPoint Android PointRemoteDataSourceImpl 대응). */
 export const POS_COMMON = {

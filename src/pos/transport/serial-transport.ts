@@ -174,7 +174,7 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
       link.alive        = true;
       link.lastAliveLog = now;
       link.rxSinceLog   = 1;
-      log.info("[연동] ✅ 단말기 신호 수신 — 시리얼 연결 정상");
+      log.status("[연동] ✅ 단말기 신호 수신 — 시리얼 연결 정상");
     } else if (now - link.lastAliveLog >= LINK_ALIVE_LOG_MS) {
       const sec = Math.round((now - link.lastAliveLog) / 1000);
       log.debug(`[연동] 단말기 신호 유지 중 — 최근 ${sec}초간 ${link.rxSinceLog}건 수신`);

@@ -80,16 +80,20 @@ async function bootstrap(): Promise<void> {
   // 오류 수집을 가장 먼저 건다 — 이후 초기화 단계에서 터지는 것도 잡아야 한다.
   initMonitoring(__APP_VERSION__);
   // 어느 서버를 보는지 기동 즉시 남긴다 — 개발 서버를 본 채 운영에 나가는 사고 방지.
-  log.info(`[PharmPoint] v${__APP_VERSION__} 기동 — ${API_ENV_LABEL} 서버 (${API_BASE_URL})`);
+  log.status(`[PharmPoint] v${__APP_VERSION__} 기동 — ${API_ENV_LABEL} 서버 (${API_BASE_URL})`);
 
   await ensureInit();
 
-  try {
-    const cfg = await getPointUseConfig();
-    setAppConfig({ minPoint: cfg.minPoint, isMinPointEnabled: cfg.isMinPointEnabled });
-  } catch (e) {
-    console.warn("[main] 앱 설정 로드 실패", e);
-  }
+  // 포인트 설정 조회는 기다리지 않는다.
+  //
+  // 이 호출은 백엔드를 타고, 그 앞에 토큰 발급(enroll/refresh)이 먼저 붙는다.
+  // await 로 묶어두면 백엔드가 느리거나 응답하지 않을 때 아래 소켓 기동까지
+  // 통째로 밀려, 캣포스가 단말기에 접속하지 못한다.
+  // 포인트 적립·사용과 캣포스 연결은 별개 경로이므로 설정은 오는 대로 반영한다.
+  // (설정은 대기화면 진입 시 syncIdleConfig 가 다시 읽는다)
+  void getPointUseConfig()
+    .then((cfg) => setAppConfig({ minPoint: cfg.minPoint, isMinPointEnabled: cfg.isMinPointEnabled }))
+    .catch((e) => console.warn("[main] 앱 설정 로드 실패", e));
 
   if (isSettingsEntry()) {
     // 설정 진입점 — 라우터만 시작. WebSocket / AppSession 미기동.

@@ -21,6 +21,14 @@ function noop(): void { /* 운영 빌드에서는 출력하지 않는다 */ }
 export const log = {
   /** 고빈도 기록 — 프레임 덤프, 신호 유지 알림, HTTP 요청 라인. */
   debug: VERBOSE ? console.debug.bind(console) : noop,
-  /** 일반 진행 기록 — 기동, 연동 상태, 전문 송수신, HTTP 응답. */
+  /** 일반 진행 기록 — 전문 송수신, HTTP 응답, 화면 전환. */
   info:  VERBOSE ? console.log.bind(console)   : noop,
+  /**
+   * 연동 상태 — 운영 빌드에서도 남긴다.
+   *
+   * 기동·POS 접속·단말기 연결처럼 "붙었는가"만 알리는 몇 줄이다.
+   * 내부 구현이 드러나지 않고, 현장에서 연동이 안 될 때 이것마저 없으면
+   * 원인을 짚을 방법이 없다. 상태가 바뀌는 순간에만 찍혀 양도 적다.
+   */
+  status: console.log.bind(console),
 };
