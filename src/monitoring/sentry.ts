@@ -54,9 +54,6 @@ export function initMonitoring(version: string): void {
     dsn:     SENTRY_DSN,
     release: `${PLUGIN_ID}@${version}`,
 
-    // Logs 기능 활성화. 이것만으로는 콘솔 출력이 올라가지 않는다 —
-    // enableLogs 는 Sentry.logger API 를 여는 것이고, console.* 를 Logs 로 보내려면
-    // 아래 consoleLoggingIntegration 이 따로 필요하다.
     // ── 무엇을 올리는가 ────────────────────────────────
     //
     // 오류만 올린다. 평상시 로그는 올리지 않는다.
