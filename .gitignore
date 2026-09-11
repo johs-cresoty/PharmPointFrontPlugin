@@ -8,3 +8,7 @@ dist/
 
 # tsc
 *.tsbuildinfo
+
+# 빌드 산출물 — 토스 개발자센터 업로드용. 저장소에 두지 않는다.
+pharmpoint-toss.zip
+PharmPointFrontPlugin.zip
