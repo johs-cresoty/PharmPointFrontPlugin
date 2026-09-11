@@ -19,6 +19,7 @@ import { SocketConstants as C } from "../protocol/socket-constants";
 import { findPiiByteRanges } from "../../utils/pii-mask";
 import { log } from "../../utils/log";
 import { reportLinkFailure } from "../../monitoring/sentry";
+import { setLinkStatus } from "../../monitoring/link-status";
 
 // 버퍼 상한 — TRM 시그니처를 못 찾고 과다 누적되는 상황 방어.
 const MAX_BUFFER_BYTES = 4096;
@@ -178,7 +179,8 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
       link.alive        = true;
       link.lastAliveLog = now;
       link.rxSinceLog   = 1;
-      log.status("[연동] 결제단말기 연결됨 — 신호 수신 중");
+      setLinkStatus("결제단말기", "연결됨");
+      log.status("[연동] 결제단말기 연결됨");
     } else if (now - link.lastAliveLog >= LINK_ALIVE_LOG_MS) {
       const sec = Math.round((now - link.lastAliveLog) / 1000);
       log.debug(`[연동] 결제단말기 신호 정상 — 최근 ${sec}초간 ${link.rxSinceLog}건 수신`);
@@ -192,6 +194,7 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
     link.watchdog = setTimeout(() => {
       link.watchdog = null;
       link.alive    = false;
+      setLinkStatus("결제단말기", "연결 끊김");
       log.status(`[연동] 결제단말기 연결 끊김 — ${LINK_IDLE_MS / 1000}초간 신호가 없습니다`);
 
       // 잠깐 끊기는 것은 흔하다. 계속 끊겨 있을 때만 Sentry 로 올린다.

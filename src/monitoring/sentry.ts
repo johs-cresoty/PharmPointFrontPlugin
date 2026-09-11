@@ -18,6 +18,7 @@
 import * as Sentry from "@sentry/browser";
 import { maskPiiText } from "../utils/pii-mask";
 import { log, readLinkLog } from "../utils/log";
+import { readLinkStatus } from "./link-status";
 
 /**
  * Sentry 프로젝트 DSN. 비워두면 수집하지 않는다.
@@ -94,12 +95,20 @@ export function sendDiagnostic(): boolean {
   lastDiagnosticAt = now;
 
   // 설정 화면(settings.html)은 포인트 화면과 실행 환경이 달라 breadcrumb 이 비어 있다.
-  // 두 화면이 함께 읽는 곳에 따로 보관해 둔 연동 기록을 실어 보낸다.
+  // 두 화면이 함께 읽는 곳에 따로 보관해 둔 기록을 실어 보낸다.
   const linkLog = readLinkLog();
+  const status  = readLinkStatus();
 
   Sentry.captureMessage("진단 보내기 — 사용자가 요청한 상태 보고", {
     level: "info",
     extra: {
+      // 로그는 '일어난 일'만 남는다. 거래가 없던 동안에는 아무 줄도 없어서
+      // 로그만으로는 지금 붙어 있는지 알 수 없다. 현재 값을 따로 싣는다.
+      "현재 상태": [
+        `캣포스     : ${status.캣포스}`,
+        `결제단말기 : ${status.결제단말기}`,
+        `마지막 변화 : ${status.갱신시각}`,
+      ].join("\n"),
       "연동 기록": linkLog.length ? linkLog.join("\n") : "(기록 없음 — 플러그인이 재시작된 직후일 수 있습니다)",
       "기록 줄수": linkLog.length,
     },

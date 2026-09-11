@@ -80,7 +80,11 @@ async function bootstrap(): Promise<void> {
   // 오류 수집을 가장 먼저 건다 — 이후 초기화 단계에서 터지는 것도 잡아야 한다.
   initMonitoring(__APP_VERSION__);
   // 어느 서버를 보는지 기동 즉시 남긴다 — 개발 서버를 본 채 운영에 나가는 사고 방지.
-  log.status(`[연동] 팜포인트 시작 — 버전 ${__APP_VERSION__} · ${API_ENV_LABEL} 서버 사용`);
+  // 설정 화면(settings.html)도 플러그인을 부팅한다. 거기서도 이 줄을 남기면
+  // 진단 기록에 '시작' 이 두 번 찍혀 재시작한 것처럼 읽힌다. 본 화면에서만 남긴다.
+  if (!isSettingsEntry()) {
+    log.status(`[연동] 팜포인트 시작 — 버전 ${__APP_VERSION__} · ${API_ENV_LABEL} 서버 사용`);
+  }
 
   await ensureInit();
 

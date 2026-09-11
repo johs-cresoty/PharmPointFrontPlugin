@@ -23,6 +23,7 @@ import { createVanTransport, type VanTransport } from "./transport/van-transport
 import { maskPiiText } from "../utils/pii-mask";
 import { log } from "../utils/log";
 import { reportLinkFailure } from "../monitoring/sentry";
+import { setLinkStatus } from "../monitoring/link-status";
 import { catCommandLabel, terminalCommandLabel } from "./protocol/command-names";
 import { SocketConfig } from "./socket-config";
 
@@ -237,12 +238,15 @@ function create() {
     if (serRes.status === "rejected") console.error("[연동] ❌ 결제단말기 연결 준비 실패 — 시리얼 포트를 열지 못했습니다. 적립·사용 요청을 받을 수 없습니다.", serRes.reason);
     // 두 채널 기동 결과를 한 줄로 모아둔다. 여러 줄에 흩어진 로그를 훑지 않아도
     // 어느 쪽이 못 떴는지 바로 보이게 하기 위함.
-    // '대기' 는 받을 준비가 됐다는 뜻이다. '정상' 이라고 쓰면 이미 연결된 것으로 오해된다.
     const wsOk  = wsRes.status  === "fulfilled";
     const serOk = serRes.status === "fulfilled";
+    // 여기서 "대기 중" 은 아직 아무도 안 붙었다는 뜻이다. 붙으면 각자 "연결됨" 으로 바뀐다.
+    setLinkStatus("캣포스",    wsOk  ? "연결 대기 중" : "준비 실패");
+    setLinkStatus("결제단말기", serOk ? "연결 대기 중" : "준비 실패");
     log.status(
-      `[연동] 준비 완료 — 캣포스 연결 대기 중(포트 ${SocketConfig.port}): ${wsOk ? "준비됨" : "실패"} · ` +
-      `결제단말기 연결 대기 중: ${serOk ? "준비됨" : "실패"}`,
+      `[연동] ${wsOk && serOk ? "준비 완료" : "준비 실패"} — ` +
+      `캣포스 ${wsOk ? "연결 대기 중" : "실패"} · 결제단말기 ${serOk ? "연결 대기 중" : "실패"} ` +
+      `(포트 ${SocketConfig.port})`,
     );
     if (!wsOk || !serOk) {
       reportLinkFailure(
