@@ -18,6 +18,7 @@ import { SocketConfig as cfg } from "../socket-config";
 import { SocketConstants as C } from "../protocol/socket-constants";
 import { findPiiByteRanges } from "../../utils/pii-mask";
 import { log } from "../../utils/log";
+import { reportLinkFailure } from "../../monitoring/sentry";
 
 // 버퍼 상한 — TRM 시그니처를 못 찾고 과다 누적되는 상황 방어.
 const MAX_BUFFER_BYTES = 4096;
@@ -83,6 +84,8 @@ function isDigit(b: number): boolean {
 const LINK_IDLE_MS = 15_000;
 /** 연동이 살아있는 동안 남기는 상태 로그 주기. */
 const LINK_ALIVE_LOG_MS = 60_000;
+/** 신호가 이만큼 계속 끊겨 있으면 장애로 보고 Sentry 에 올린다. */
+const OUTAGE_MS = 120_000;
 
 /**
  * 같은 줄이 반복되면 접어서 횟수로만 알리는 로거.
@@ -160,6 +163,7 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
     rxSinceLog:   0,
     lastAliveLog: 0,
     watchdog:     null as ReturnType<typeof setTimeout> | null,
+    outage:       null as ReturnType<typeof setTimeout> | null,
   };
 
   const logRx  = createFoldedLogger();
@@ -174,19 +178,28 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
       link.alive        = true;
       link.lastAliveLog = now;
       link.rxSinceLog   = 1;
-      log.status("[연동] ✅ 단말기 신호 수신 — 시리얼 연결 정상");
+      log.status("[연동] 결제단말기 연결됨 — 신호 수신 중");
     } else if (now - link.lastAliveLog >= LINK_ALIVE_LOG_MS) {
       const sec = Math.round((now - link.lastAliveLog) / 1000);
-      log.debug(`[연동] 단말기 신호 유지 중 — 최근 ${sec}초간 ${link.rxSinceLog}건 수신`);
+      log.debug(`[연동] 결제단말기 신호 정상 — 최근 ${sec}초간 ${link.rxSinceLog}건 수신`);
       link.lastAliveLog = now;
       link.rxSinceLog   = 0;
     }
 
     if (link.watchdog) clearTimeout(link.watchdog);
+    if (link.outage)   { clearTimeout(link.outage); link.outage = null; }
+
     link.watchdog = setTimeout(() => {
       link.watchdog = null;
       link.alive    = false;
-      console.warn(`[연동] ⚠️ 단말기 신호 끊김 — ${LINK_IDLE_MS / 1000}초간 수신 없음`);
+      log.status(`[연동] 결제단말기 연결 끊김 — ${LINK_IDLE_MS / 1000}초간 신호가 없습니다`);
+
+      // 잠깐 끊기는 것은 흔하다. 계속 끊겨 있을 때만 Sentry 로 올린다.
+      // (끊겼다 붙었다 하는 것까지 올리면 정작 봐야 할 장애가 묻힌다)
+      link.outage = setTimeout(() => {
+        link.outage = null;
+        reportLinkFailure(`결제단말기 연결 끊김이 ${OUTAGE_MS / 60_000}분 지속됨 — 시리얼 선 연결을 확인해주세요`);
+      }, OUTAGE_MS);
     }, LINK_IDLE_MS);
   }
 
@@ -381,6 +394,7 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
     if (!state.opened && !state.attempted) return;
     if (state.idleTimer)  { clearTimeout(state.idleTimer);  state.idleTimer  = null; }
     if (link.watchdog)    { clearTimeout(link.watchdog);    link.watchdog    = null; }
+    if (link.outage)      { clearTimeout(link.outage);      link.outage      = null; }
     link.alive = false;
     unregisterUnloadClose();
     try { state.unlisten?.(); } catch { /* noop */ }

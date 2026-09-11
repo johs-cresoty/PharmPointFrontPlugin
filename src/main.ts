@@ -7,8 +7,8 @@
  *   2) 라우터에 뷰 등록 후 시작
  *   3) 소켓 이벤트 → 화면 라우팅 콜백 연결
  */
-import { ensureInit, API_BASE_URL, API_ENV_LABEL } from "./api/config";
-import { initMonitoring } from "./monitoring/sentry";
+import { ensureInit, API_ENV_LABEL, currentBusinessNumber } from "./api/config";
+import { initMonitoring, setMerchantTag } from "./monitoring/sentry";
 import { start as startAppSession, setConfig as setAppConfig, stop as stopAppSession } from "./features/app-session/app-session.service";
 import { getPointUseConfig } from "./features/app-config/app-config.service";
 import { getCurrentPath, navigate, register, start as startRouter } from "./router";
@@ -80,9 +80,12 @@ async function bootstrap(): Promise<void> {
   // 오류 수집을 가장 먼저 건다 — 이후 초기화 단계에서 터지는 것도 잡아야 한다.
   initMonitoring(__APP_VERSION__);
   // 어느 서버를 보는지 기동 즉시 남긴다 — 개발 서버를 본 채 운영에 나가는 사고 방지.
-  log.status(`[PharmPoint] v${__APP_VERSION__} 기동 — ${API_ENV_LABEL} 서버 (${API_BASE_URL})`);
+  log.status(`[연동] 팜포인트 시작 — 버전 ${__APP_VERSION__} · ${API_ENV_LABEL} 서버 사용`);
 
   await ensureInit();
+
+  // 어느 약국인지 Sentry 에 표시. "○○약국에서 연동이 안 된다" 문의가 오면 이걸로 찾는다.
+  setMerchantTag(currentBusinessNumber());
 
   // 포인트 설정 조회는 기다리지 않는다.
   //

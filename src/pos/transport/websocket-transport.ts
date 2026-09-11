@@ -77,7 +77,7 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
         state.connectionId = connectionId;
         // 캣포스가 실제로 붙은 시점. 연동이 안 될 때 "서버는 떴는데 상대가 안 붙은 것"인지
         // "서버부터 못 뜬 것"인지 이 줄 하나로 갈린다.
-        log.status(`[연동] ✅ POS 접속 — port=${cfg.port}`);
+        log.status(`[연동] 캣포스 연결됨 (포트 ${cfg.port})`);
       },
 
       onMessage: ({ connectionId, data }) => {
@@ -92,7 +92,7 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
       onDisconnection: ({ connectionId }) => {
         if (state.connectionId === connectionId) {
           state.connectionId = null;
-          log.status("[연동] ⚠️ POS 접속 끊김");
+          log.status("[연동] 캣포스 연결 끊김");
         }
       },
 

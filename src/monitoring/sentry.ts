@@ -44,6 +44,32 @@ function scrub<T>(event: T): T {
   }
 }
 
+/**
+ * 이 단말이 어느 약국인지 표시.
+ *
+ * "○○약국에서 연동이 안 된다"는 문의가 왔을 때 Sentry 에서 바로 찾기 위함이다.
+ * 사업자번호는 사업자 정보이지 개인정보가 아니다.
+ */
+export function setMerchantTag(businessNumber: string): void {
+  if (!SENTRY_DSN || !businessNumber) return;
+  Sentry.setTag("merchant", businessNumber);
+}
+
+/**
+ * 연동이 끊긴 상태를 오류로 올린다.
+ *
+ * 연동 실패는 예외가 아니라 '아무 일도 안 일어나는' 상태라 가만히 두면 Sentry 에
+ * 아무것도 남지 않는다. 그래서 실패를 감지한 쪽에서 직접 불러 올린다.
+ * 직전 상태 기록은 breadcrumb 으로 자동으로 함께 붙는다.
+ */
+export function reportLinkFailure(message: string, detail?: unknown): void {
+  if (!SENTRY_DSN) return;
+  Sentry.captureMessage(message, {
+    level: "error",
+    extra: detail === undefined ? undefined : { detail: String(detail) },
+  });
+}
+
 export function initMonitoring(version: string): void {
   if (!SENTRY_DSN) {
     log.debug("[Sentry] DSN 미설정 — 로그 수집 비활성");

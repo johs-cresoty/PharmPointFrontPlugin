@@ -22,6 +22,9 @@ import { createSerialTransport, toHexMasked, type SerialTransport } from "./tran
 import { createVanTransport, type VanTransport } from "./transport/van-transport";
 import { maskPiiText } from "../utils/pii-mask";
 import { log } from "../utils/log";
+import { reportLinkFailure } from "../monitoring/sentry";
+import { catCommandLabel, terminalCommandLabel } from "./protocol/command-names";
+import { SocketConfig } from "./socket-config";
 
 // ── 이벤트 payload 타입 ───────────────────────────
 
@@ -117,7 +120,14 @@ function create() {
   // ── CATPOS JSON 수신 처리 ──────────────────────
   function onCatText(text: string): void {
     const msg = CatposCodec.parse(text);
-    if (!msg) return;
+    if (!msg) {
+      console.warn("[연동] 캣포스가 보낸 전문을 읽지 못했습니다 — 형식이 규격과 다릅니다");
+      return;
+    }
+    // 어떤 요청이 실제로 도착했는지 남긴다.
+    // 이 줄이 없으면 캣포스가 전문을 보내지 않은 것이고, 있으면 보낸 것이다.
+    // 화면이 안 뜬다는 문의가 왔을 때 책임 소재를 이 한 줄로 가른다.
+    log.status(`[연동] 캣포스 요청 받음 — ${catCommandLabel(msg.command)}`);
 
     switch (msg.command) {
       case C.CATPOS_SESSION_START: catSessionActive = true;  break;
@@ -136,7 +146,7 @@ function create() {
     // 전문 형식(마커·플래그)까지 맞았다는 뜻이라, 연동 성립 시점으로 한 번만 남긴다.
     if (!trmLinkConfirmed) {
       trmLinkConfirmed = true;
-      log.status("[연동] ✅ 팜포인트 전문 최초 수신 — 단말기 연동 확인");
+      log.status("[연동] 결제단말기와 팜포인트 통신 확인됨");
     }
 
     if (catSessionActive) {
@@ -169,8 +179,9 @@ function create() {
       return;
     }
 
+    log.status(`[연동] 결제단말기 요청 받음 — ${terminalCommandLabel(parsed.cmd)}`);
     // 필드는 커맨드마다 구성이 달라 키 기반으로 가릴 수 없다. 값 패턴으로 번호만 가린다.
-    log.info(`[SocketGateway] <= TRM cmd=${parsed.cmd} fields=${maskPiiText(JSON.stringify(parsed.fields))}`);
+    log.info(`[SocketGateway] 결제단말기 필드 — ${maskPiiText(JSON.stringify(parsed.fields))}`);
 
     const event = mapTerminalCommandToEvent(parsed.cmd);
     if (!event) {
@@ -222,14 +233,23 @@ function create() {
       withWatchdog(ws.start(),  "웹소켓 기동"),
       withWatchdog(ser.start(), "시리얼 기동"),
     ]);
-    if (wsRes.status  === "rejected") console.error("[연동] ❌ 웹소켓 서버 기동 실패 — 캣포스가 접속할 수 없다", wsRes.reason);
-    if (serRes.status === "rejected") console.error("[연동] ❌ 시리얼 기동 실패 — 단말기 전문을 받을 수 없다", serRes.reason);
+    if (wsRes.status  === "rejected") console.error(`[연동] ❌ 캣포스 연결 준비 실패 — 포트 ${SocketConfig.port} 를 열지 못했습니다. 캣포스가 접속할 수 없습니다.`, wsRes.reason);
+    if (serRes.status === "rejected") console.error("[연동] ❌ 결제단말기 연결 준비 실패 — 시리얼 포트를 열지 못했습니다. 적립·사용 요청을 받을 수 없습니다.", serRes.reason);
     // 두 채널 기동 결과를 한 줄로 모아둔다. 여러 줄에 흩어진 로그를 훑지 않아도
     // 어느 쪽이 못 떴는지 바로 보이게 하기 위함.
+    // '대기' 는 받을 준비가 됐다는 뜻이다. '정상' 이라고 쓰면 이미 연결된 것으로 오해된다.
+    const wsOk  = wsRes.status  === "fulfilled";
+    const serOk = serRes.status === "fulfilled";
     log.status(
-      `[연동] 채널 기동 — POS(웹소켓) ${wsRes.status === "fulfilled" ? "정상" : "실패"} · ` +
-      `단말기(시리얼) ${serRes.status === "fulfilled" ? "정상" : "실패"}`,
+      `[연동] 준비 완료 — 캣포스 연결 대기 중(포트 ${SocketConfig.port}): ${wsOk ? "준비됨" : "실패"} · ` +
+      `결제단말기 연결 대기 중: ${serOk ? "준비됨" : "실패"}`,
     );
+    if (!wsOk || !serOk) {
+      reportLinkFailure(
+        `연동 준비 실패 — 캣포스 ${wsOk ? "정상" : "실패"} / 결제단말기 ${serOk ? "정상" : "실패"}`,
+        [wsRes, serRes].filter((r) => r.status === "rejected").map((r) => (r as PromiseRejectedResult).reason),
+      );
+    }
   }
 
   async function stop(): Promise<void> {
@@ -250,7 +270,13 @@ function create() {
   // ── CATPOS(PC) 응답 송신 ────────────────────
 
   function sendCAT(text: string): Promise<void> {
-    if (!ws) return Promise.resolve();
+    if (!ws) {
+      console.warn("[연동] 캣포스로 응답하지 못했습니다 — 연결이 없습니다");
+      return Promise.resolve();
+    }
+    // 요청은 받았는데 응답을 못 보낸 경우를 가르기 위해 커맨드만 남긴다.
+    const sentCmd = CatposCodec.parse(text)?.command;
+    log.status(`[연동] 캣포스로 응답 보냄 — ${sentCmd ? catCommandLabel(sentCmd) : "형식 오류"}`);
     return ws.send(text);
   }
 
