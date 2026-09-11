@@ -7,18 +7,30 @@
  *   - sdk.app.getMerchant().businessNumber  → businessNumber(=TAXNO) (약국 사업자번호)
  *
  * 서버 API 인증 스펙: { businessRegistrationNumber, serialNumber } — merchantId 는 현재 스펙에서 미사용
- * baseUrl: https://dev-app-api.catpos.co.kr (신규 인증 서버)
  */
 
 /**
- * 절대 base URL.
- *   - 개발 (npm run dev) : https://dev-app-api.catpos.co.kr
- *   - 운영 (npm run build): https://app-api.catpos.co.kr
- * import.meta.env.PROD 는 Vite 가 build 시 true 로 정적 치환.
+ * 빌드 결과물이 바라볼 백엔드.
+ *
+ * ⚠️ 운영 배포 전에 "prod" 로 되돌릴 것.
+ *    빌드 방식(dev/build)이 아니라 이 값이 서버를 정한다. 검수용 빌드를 개발 서버로
+ *    내보내야 하는 경우가 있어 빌드 모드와 분리했다.
+ *    실수를 막기 위해 기동 시 어느 서버를 보는지 콘솔에 남긴다(main.ts).
  */
-export const API_BASE_URL = import.meta.env.PROD
-  ? "https://app-api.catpos.co.kr"
-  : "https://dev-app-api.catpos.co.kr";
+const API_TARGET: "dev" | "prod" = "dev";
+
+const API_HOSTS = {
+  dev:  "https://dev-app-api.catpos.co.kr",
+  prod: "https://app-api.catpos.co.kr",
+} as const;
+
+const API_LABELS = { dev: "개발", prod: "운영" } as const;
+
+/** 절대 base URL. */
+export const API_BASE_URL = API_HOSTS[API_TARGET];
+
+/** 기동 로그·진단용 — 지금 어느 서버를 보고 있는지. */
+export const API_ENV_LABEL = API_LABELS[API_TARGET];
 
 /** axios baseURL — dev 는 vite proxy 우회를 위해 비움. */
 export const AXIOS_BASE_URL = import.meta.env.DEV ? "" : API_BASE_URL;
