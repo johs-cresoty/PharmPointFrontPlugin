@@ -92,8 +92,8 @@ function createFoldedLogger(): (line: string) => void {
   let repeat   = 0;
   return (line: string): void => {
     if (line === lastLine) { repeat += 1; return; }
-    if (repeat > 0) console.log(`[serial] ↑ 같은 전문 ${repeat}회 반복`);
-    console.log(`[serial] ${line}`);
+    if (repeat > 0) console.debug(`[serial] ↑ 같은 전문 ${repeat}회 반복`);
+    console.debug(`[serial] ${line}`);
     lastLine = line;
     repeat   = 0;
   };
@@ -176,7 +176,7 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
       console.log("[연동] ✅ 단말기 신호 수신 — 시리얼 연결 정상");
     } else if (now - link.lastAliveLog >= LINK_ALIVE_LOG_MS) {
       const sec = Math.round((now - link.lastAliveLog) / 1000);
-      console.log(`[연동] 단말기 신호 유지 중 — 최근 ${sec}초간 ${link.rxSinceLog}건 수신`);
+      console.debug(`[연동] 단말기 신호 유지 중 — 최근 ${sec}초간 ${link.rxSinceLog}건 수신`);
       link.lastAliveLog = now;
       link.rxSinceLog   = 0;
     }

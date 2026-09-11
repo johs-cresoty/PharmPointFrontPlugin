@@ -45,7 +45,7 @@ function scrub<T>(event: T): T {
 
 export function initMonitoring(version: string): void {
   if (!SENTRY_DSN) {
-    console.log("[Sentry] DSN 미설정 — 로그 수집 비활성");
+    console.debug("[Sentry] DSN 미설정 — 로그 수집 비활성");
     return;
   }
 
@@ -58,8 +58,19 @@ export function initMonitoring(version: string): void {
     // 아래 consoleLoggingIntegration 이 따로 필요하다.
     enableLogs: true,
     integrations: [
-      // 우리가 남기는 [연동]·[WS]·[serial]·[HTTP] 로그를 그대로 수집한다.
-      // 오류가 났을 때 직전에 무슨 전문이 오갔는지 보려면 이게 있어야 한다.
+      // ── 로그 등급 ──────────────────────────────────────
+      // 여기 levels 가 두 등급을 가른다.
+      //
+      //   console.log / warn / error  → 단말기 로그 뷰어 + Sentry
+      //       사건이 지난 뒤에도 봐야 하는 것. 기동, 연동 성립·끊김,
+      //       전문 송수신, HTTP 응답, 모든 경고·오류.
+      //
+      //   console.debug               → 단말기 로그 뷰어에만
+      //       실시간으로 볼 때만 쓸모 있는 고빈도 기록. 신호 유지 알림(1분 주기),
+      //       시리얼 프레임 덤프, HTTP 요청 라인.
+      //
+      // debug 를 올리지 않는 이유는 양이다. 신호 유지 알림만 해도 단말 1대당
+      // 하루 1,440건이라, 매장이 늘면 정작 봐야 할 기록이 한도에 밀려 사라진다.
       Sentry.consoleLoggingIntegration({ levels: ["log", "warn", "error"] }),
     ],
 
@@ -67,5 +78,5 @@ export function initMonitoring(version: string): void {
     beforeSendLog: (log)   => scrub(log),
   });
 
-  console.log(`[Sentry] 로그 수집 시작 — release=${PLUGIN_ID}@${version}`);
+  console.debug(`[Sentry] 로그 수집 시작 — release=${PLUGIN_ID}@${version}`);
 }

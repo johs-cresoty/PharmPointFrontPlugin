@@ -30,7 +30,7 @@ type AuthResponse = {
  */
 async function postWithLog<T>(path: string, body: unknown): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
-  console.log(`[HTTP] → POST ${url}`);
+  console.debug(`[HTTP] → POST ${url}`);
   try {
     const res = await axios.post<T>(url, body, {
       headers: { "Content-Type": "application/json; charset=UTF-8" },
@@ -59,7 +59,6 @@ export async function enroll(): Promise<string> {
     throw new Error("AuthService.enroll: token/refreshToken 응답 누락");
   }
   TokenStorage.save(token, refreshToken);
-  console.log("[AuthService] enroll 성공, 토큰 저장 완료");
   return token;
 }
 
@@ -80,7 +79,6 @@ export async function refresh(): Promise<string> {
     throw new Error("AuthService.refresh: token/refreshToken 응답 누락");
   }
   TokenStorage.save(newToken, newRefreshToken);
-  console.log("[AuthService] refresh 성공, 토큰 갱신 완료");
   return newToken;
 }
 

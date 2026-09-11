@@ -90,7 +90,7 @@ apiClient.interceptors.request.use(async (config) => {
   const url    = `${config.baseURL ?? ""}${config.url ?? ""}`;
   const params = config.params ? ` params=${safeBody(config.params)}` : "";
   const body   = config.data   ? ` body=${safeBody(config.data)}`     : "";
-  console.log(`[HTTP] → ${method} ${url}${params}${body}`);
+  console.debug(`[HTTP] → ${method} ${url}${params}${body}`);
   return config;
 });
 

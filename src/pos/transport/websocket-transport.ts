@@ -94,7 +94,6 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
         onError?.(payload);
       },
     });
-    console.log(`[WS] 서버 시작 — port=${cfg.port}${cfg.wsPath}`);
   }
 
   async function stop(): Promise<void> {
