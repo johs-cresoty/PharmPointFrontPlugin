@@ -81,8 +81,6 @@ function removeStoreNameOverlay(): void {
 // ─── 대기화면 렌더 ─────────────────────────
 
 async function renderIdle(): Promise<void> {
-  // 진단: 대기화면(포인트 조회 버튼)이 실제로 다시 그려지는 시점 추적.
-  console.log("[Home] 대기화면 렌더 — renderIdlePage 호출");
   disarmTimeout(); // 대기화면은 무동작 타임아웃 없음
   overlay?.remove();
   overlay = null;
@@ -286,10 +284,6 @@ function renderMarketingConsent(): void {
 
 function renderMarketingAgreement(phone: string): void {
   armTimeout();
-  // 약관 항목을 눌렀을 때 SDK 가 실제로 어떤 주소를 여는지 남긴다.
-  // ACL 차단(Access Denied)이 떴을 때, 단말에 올라간 번들이 옛 주소를 들고 있는 것인지
-  // 주소는 맞는데 ACL 에서 막는 것인지 로그만 보고 가릴 수 있어야 한다.
-  console.log(`[Home] 약관 링크 — 필수=${PRIVACY_AGREEMENT_URL} 선택=${MARKETING_AGREEMENT_URL}`);
   sdk.template.renderAgreementPage({
     title:    "약관에 동의해 주세요",
     subtitle: "",
@@ -347,13 +341,12 @@ export async function renderHome(): Promise<void> {
   else if (mode === "CAT_MARKETING_CONSENT") renderMarketingConsent();
   else                                        void renderIdle();
 
-  // 진단: 웹뷰가 백그라운드↔포그라운드 전환되는지 추적.
-  // (VAN 모듈이 화면을 잠깐 덮으면 여기 로그가 남고, 안 남으면 순수 네이티브 오버레이다.)
+  // 관리자 설정 화면에서 돌아오면 webview 가 살아있어 render 가 다시 안 돈다.
+  // 포그라운드 복귀 시점에 설정을 다시 읽어 반영한다.
   const onVisibility = (): void => {
-    console.log(`[Home] visibilitychange → ${document.visibilityState}`);
     if (document.visibilityState === "visible") void syncIdleConfig();
   };
-  const onPageShow = (): void => { console.log("[Home] pageshow"); void syncIdleConfig(); };
+  const onPageShow = (): void => { void syncIdleConfig(); };
   document.addEventListener("visibilitychange", onVisibility);
   window.addEventListener("pageshow", onPageShow);
 

@@ -137,9 +137,6 @@ function create() {
       trmLinkConfirmed = true;
       console.log("[연동] ✅ 팜포인트 전문 최초 수신 — 단말기 연동 확인");
     }
-    // 진입 즉시 원문부터 남긴다 — 아래 어느 분기로 빠지든(세션 차단·파싱 실패·미지원 커맨드)
-    // 단말기가 실제로 뭘 보냈는지는 항상 확인 가능해야 한다.
-    console.log(`[SocketGateway] <= TRM RAW (${frame.length} bytes) ${toHexMasked(frame)}`);
 
     if (catSessionActive) {
       console.warn(`[SocketGateway] CAT 세션 활성 — 단말기 전문 무시 (${toHexMasked(frame)})`);
@@ -153,7 +150,6 @@ function create() {
     }
     // ACK 자동 회신 (Android SocketManager 동일)
     const ackBytes = TerminalCodec.ack();
-    console.log(`[SocketGateway] => ACK ${toHexMasked(ackBytes)}`);
     ser?.send(ackBytes).catch((e) => console.error("[SocketGateway] ACK send fail", e));
 
     // 005(바코드 표시)는 길이 필드가 BCD 바이너리라 fields(EUC-KR 디코딩)로 읽을 수 없다.
@@ -168,7 +164,6 @@ function create() {
         `[SocketGateway] <= 005 바코드표시 수신 — 종류=${barcode.kindRaw}(${barcode.kind}) ` +
         `timeout=${barcode.timeoutSec}초 문구="${barcode.text}" 데이터=${barcode.dataLength}바이트`,
       );
-      console.log(`[SocketGateway] <= 005 바코드 데이터: ${barcode.data}`);
       bus.emit(SocketEvent.TerminalBarcodeDisplay, { barcode });
       return;
     }

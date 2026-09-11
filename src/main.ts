@@ -8,6 +8,7 @@
  *   3) 소켓 이벤트 → 화면 라우팅 콜백 연결
  */
 import { ensureInit } from "./api/config";
+import { initMonitoring } from "./monitoring/sentry";
 import { start as startAppSession, setConfig as setAppConfig, stop as stopAppSession } from "./features/app-session/app-session.service";
 import { getPointUseConfig } from "./features/app-config/app-config.service";
 import { getCurrentPath, navigate, register, start as startRouter } from "./router";
@@ -75,6 +76,10 @@ function isSettingsEntry(): boolean {
 }
 
 async function bootstrap(): Promise<void> {
+  // 오류 수집을 가장 먼저 건다 — 이후 초기화 단계에서 터지는 것도 잡아야 한다.
+  initMonitoring(__APP_VERSION__);
+  console.log(`[PharmPoint] v${__APP_VERSION__} 기동`);
+
   await ensureInit();
 
   try {

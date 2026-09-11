@@ -78,7 +78,6 @@ export function encodeEan13(raw: string): Ean13Result | null {
   let digits: string;
   if (src.length === 12) {
     digits = src + String(ean13CheckDigit(src));
-    console.log(`[EAN13] 12자리 수신 — 체크digit ${digits[12]} 계산해 부착`);
   } else {
     const expected = ean13CheckDigit(src.slice(0, 12));
     const actual   = src.charCodeAt(12) - 48;

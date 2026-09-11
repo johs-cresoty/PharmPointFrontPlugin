@@ -320,9 +320,8 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
     state.attempted = true;
     try {
       await withTimeout(sdk.serial.close(), 2000, "선행 close");
-      console.log("[serial] 선행 close 처리 — 잔여 포트 회수 시도 완료");
     } catch (e) {
-      console.log("[serial] 선행 close 생략(열린 포트 없음)", e);
+      /* 열린 포트가 없으면 close 가 실패한다 — 정상 경로다 */
     }
 
     // intercept: true — 수신 전문을 플러그인이 먼저 가로채 팜포인트(TRM)/KIS 로 분기하기 위한 설정.
@@ -332,7 +331,6 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
     //    실단말에서 open 의 Promise 가 해소되지 않는 사례가 있어(resolve/reject 둘 다 없음),
     //    await 하면 아래 listen 등록 줄까지 도달하지 못해 수신이 영영 불가능해진다.
     //    포트 자체는 열려 있을 수 있으므로 응답을 기다리지 말고 리스너부터 건다.
-    console.log(`[serial] open 시도 — baudRate=${cfg.baudRate}, intercept=true, sdk.serial=${typeof sdk.serial}`);
     const openWatchdog = setTimeout(() => {
       console.warn("[serial] ⚠️ open 5초 무응답 — 응답을 기다리지 않고 리스너로 수신 시도 중");
     }, 5000);
@@ -374,7 +372,6 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
         onError?.(e);
       }
     });
-    console.log("[serial] listen 등록 완료");
   }
 
   async function stop(): Promise<void> {

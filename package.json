@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@sentry/browser": "^10.69.0",
     "axios": "^1.18.1",
     "qrcode-generator": "^2.0.4"
   },

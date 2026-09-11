@@ -10,6 +10,7 @@
  * 지금은 기존 IIFE 로직을 ESM 으로 그대로 이식.
  */
 import { SocketConfig as cfg } from "../socket-config";
+import { maskPiiText } from "../../utils/pii-mask";
 
 export type WebSocketTransportHandlers = {
   onText:   (text: string) => void;
@@ -51,7 +52,6 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
   }
 
   async function start(): Promise<void> {
-    console.log(`[WSTransport] start() 진입 (기존 handle=${state.handle ? "있음(재진입 방지)" : "없음"})`);
     if (state.handle) return;
 
     // 이전 세션에서 남은 고아 서버 정리 — 우리 serverId 또는 우리 port 와 일치하는 것만.
@@ -59,17 +59,14 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
     try {
       const listRes = await sdk.websocket.list();
       const targets = (listRes.servers ?? []).filter((s) => s.serverId === cfg.wsServerId || s.port === cfg.port);
-      console.log(`[WSTransport] 기존 서버 정리 시도 — ${targets.length}개 (전체 ${(listRes.servers ?? []).length}개 중)`);
       for (const s of targets) {
-        console.log(`[WSTransport] sdk.websocket.close serverId=${s.serverId} port=${s.port}`);
         try { await sdk.websocket.close({ serverId: s.serverId }); }
-        catch (e) { console.warn("[WS] close 실패 serverId=" + s.serverId, e); }
+        catch (e) { console.warn("[WS] 기존 서버 close 실패 serverId=" + s.serverId, e); }
       }
     } catch (e) {
       console.warn("[WS] 서버 목록 정리 실패", e);
     }
 
-    console.log(`[WSTransport] sdk.websocket.start 호출 — 새 리스너 등록`);
     state.handle = await sdk.websocket.start({
       serverId: state.serverId,
       port:     cfg.port,
@@ -82,8 +79,8 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
       onMessage: ({ connectionId, data }) => {
         state.connectionId = connectionId;
         const text = decodePayloadData(data);
-        // 어느 transport 인스턴스의 콜백이 실행됐는지 표시 — 여러 개면 leak 확정.
-        console.log(`[WS] 수신 ←`, text);
+        // 전문에 고객 전화번호가 실린다(PHONE_INPUT_ACK 등) — 번호만 가리고 남긴다.
+        console.log(`[WS] 수신 ← ${maskPiiText(text)}`);
         try { onText(text); }
         catch (e) { onError?.(e); }
       },
@@ -97,7 +94,7 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
         onError?.(payload);
       },
     });
-    console.log(`[WSTransport] sdk.websocket.start 완료`);
+    console.log(`[WS] 서버 시작 — port=${cfg.port}${cfg.wsPath}`);
   }
 
   async function stop(): Promise<void> {
@@ -115,7 +112,7 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
       console.warn("[WS] 송신 실패 — 연결 없음");
       return;
     }
-    console.log("[WS] 송신 →", text);
+    console.log(`[WS] 송신 → ${maskPiiText(text)}`);
     await state.handle.send(state.connectionId, encodeSendData(text));
   }
 

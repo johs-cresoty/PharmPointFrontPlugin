@@ -1,5 +1,8 @@
 /// <reference types="vite/client" />
 
+/** vite define 으로 주입되는 package.json 의 version. */
+declare const __APP_VERSION__: string;
+
 // Toss Front SDK 는 index.html 의 <script> 로 로드되어 window.sdk 로 노출됨.
 // docs.tossplace.com 은 인증 게이트로 접근 불가하여, CDN 번들에서 확인한 시그니처 기반 최소 타입.
 // 미커버된 SDK 영역은 Phase 3 (Toss 어댑터 계층) 에서 확장 예정.

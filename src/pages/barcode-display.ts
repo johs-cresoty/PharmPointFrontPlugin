@@ -135,7 +135,6 @@ function buildQrSvg(data: string): string | null {
       }
     }
 
-    console.log(`[BarcodeDisplay] QR 생성 — 모듈 ${count}x${count}, EC=${QR_EC_LEVEL}, 데이터 ${data.length}바이트`);
 
     return (
       `<svg class="bc-qr" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" ` +
@@ -166,7 +165,6 @@ function draw(el: HTMLElement, bc: BarcodeDisplayData): void {
     // 1차원 — EAN-13. 12자리면 체크digit 을 계산해 붙이고, 13자리면 검증만 한다.
     const ean = encodeEan13(bc.data);
     if (ean) {
-      console.log(`[BarcodeDisplay] EAN-13 생성 — ${ean.digits} (95모듈)`);
       parts.push(buildEan13Svg(ean, "bc-1d"));
     } else {
       console.warn(`[BarcodeDisplay] EAN-13 인코딩 실패 — 데이터="${bc.data}"`);
