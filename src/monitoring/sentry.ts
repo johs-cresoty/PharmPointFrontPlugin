@@ -50,11 +50,21 @@ export function initMonitoring(version: string): void {
   }
 
   Sentry.init({
-    dsn:        SENTRY_DSN,
-    release:    `${PLUGIN_ID}@${version}`,
+    dsn:     SENTRY_DSN,
+    release: `${PLUGIN_ID}@${version}`,
+
+    // Logs 기능 활성화. 이것만으로는 콘솔 출력이 올라가지 않는다 —
+    // enableLogs 는 Sentry.logger API 를 여는 것이고, console.* 를 Logs 로 보내려면
+    // 아래 consoleLoggingIntegration 이 따로 필요하다.
     enableLogs: true,
-    beforeSend:     (event) => scrub(event),
-    beforeSendLog:  (log)   => scrub(log),
+    integrations: [
+      // 우리가 남기는 [연동]·[WS]·[serial]·[HTTP] 로그를 그대로 수집한다.
+      // 오류가 났을 때 직전에 무슨 전문이 오갔는지 보려면 이게 있어야 한다.
+      Sentry.consoleLoggingIntegration({ levels: ["log", "warn", "error"] }),
+    ],
+
+    beforeSend:    (event) => scrub(event),
+    beforeSendLog: (log)   => scrub(log),
   });
 
   console.log(`[Sentry] 로그 수집 시작 — release=${PLUGIN_ID}@${version}`);
