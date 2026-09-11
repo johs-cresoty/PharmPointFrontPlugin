@@ -11,6 +11,8 @@
  *    메모리에만 두면 앱 종료와 함께 사라지고, 다음 실행 때 enroll 로 다시 받는다.
  *    (재발급 비용은 앱 실행당 1회뿐이라 실사용에 영향이 없다)
  */
+import { log } from "../utils/log";
+
 const LEGACY_KEYS = ["pharmpoint_token", "pharmpoint_refresh_token"];
 
 let accessToken  = "";
@@ -21,7 +23,7 @@ for (const key of LEGACY_KEYS) {
   try {
     if (localStorage.getItem(key) !== null) {
       localStorage.removeItem(key);
-      console.log(`[TokenStorage] 이전 버전이 저장한 ${key} 제거`);
+      log.info(`[TokenStorage] 이전 버전이 저장한 ${key} 제거`);
     }
   } catch { /* 접근 불가 환경이면 무시 */ }
 }

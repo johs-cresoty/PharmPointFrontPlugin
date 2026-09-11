@@ -21,6 +21,7 @@ import { createWebSocketTransport, type WebSocketTransport } from "./transport/w
 import { createSerialTransport, toHexMasked, type SerialTransport } from "./transport/serial-transport";
 import { createVanTransport, type VanTransport } from "./transport/van-transport";
 import { maskPiiText } from "../utils/pii-mask";
+import { log } from "../utils/log";
 
 // ── 이벤트 payload 타입 ───────────────────────────
 
@@ -135,7 +136,7 @@ function create() {
     // 전문 형식(마커·플래그)까지 맞았다는 뜻이라, 연동 성립 시점으로 한 번만 남긴다.
     if (!trmLinkConfirmed) {
       trmLinkConfirmed = true;
-      console.log("[연동] ✅ 팜포인트 전문 최초 수신 — 단말기 연동 확인");
+      log.info("[연동] ✅ 팜포인트 전문 최초 수신 — 단말기 연동 확인");
     }
 
     if (catSessionActive) {
@@ -160,7 +161,7 @@ function create() {
         console.warn(`[SocketGateway] 005 파싱 실패 — ${toHexMasked(frame)}`);
         return;
       }
-      console.log(
+      log.info(
         `[SocketGateway] <= 005 바코드표시 수신 — 종류=${barcode.kindRaw}(${barcode.kind}) ` +
         `timeout=${barcode.timeoutSec}초 문구="${barcode.text}" 데이터=${barcode.dataLength}바이트`,
       );
@@ -169,7 +170,7 @@ function create() {
     }
 
     // 필드는 커맨드마다 구성이 달라 키 기반으로 가릴 수 없다. 값 패턴으로 번호만 가린다.
-    console.log(`[SocketGateway] <= TRM cmd=${parsed.cmd} fields=${maskPiiText(JSON.stringify(parsed.fields))}`);
+    log.info(`[SocketGateway] <= TRM cmd=${parsed.cmd} fields=${maskPiiText(JSON.stringify(parsed.fields))}`);
 
     const event = mapTerminalCommandToEvent(parsed.cmd);
     if (!event) {
@@ -209,7 +210,7 @@ function create() {
     if (serRes.status === "rejected") console.error("[SocketGateway] ❌ serial start 실패",    serRes.reason);
     // 두 채널 기동 결과를 한 줄로 모아둔다. 여러 줄에 흩어진 로그를 훑지 않아도
     // 어느 쪽이 못 떴는지 바로 보이게 하기 위함.
-    console.log(
+    log.info(
       `[연동] 채널 기동 — POS(웹소켓) ${wsRes.status === "fulfilled" ? "정상" : "실패"} · ` +
       `단말기(시리얼) ${serRes.status === "fulfilled" ? "정상" : "실패"}`,
     );
@@ -258,7 +259,7 @@ function create() {
       console.warn(`[SocketGateway] ⚠️ ${label} 송신 불가 — 시리얼 미기동(ser=null)`);
       return Promise.resolve();
     }
-    console.log(`[SocketGateway] => ${label} ${toHexMasked(bytes)}`);
+    log.info(`[SocketGateway] => ${label} ${toHexMasked(bytes)}`);
     return ser.send(bytes).catch((e) => {
       console.error(`[SocketGateway] ❌ ${label} 송신 실패`, e);
     });

@@ -14,6 +14,7 @@ import qrcode from "qrcode-generator";
 import { navigate, onCleanup } from "../router";
 import { buildEan13Svg, encodeEan13, EAN13_DISPLAY_WIDTH } from "../features/barcode/ean13";
 import type { BarcodeDisplayData } from "../pos/protocol/terminal-codec";
+import { log } from "../utils/log";
 
 const STYLE_ID     = "pharm-barcode-display-style";
 const CONTAINER_ID = "pharm-barcode-display-container";
@@ -230,12 +231,12 @@ export function renderBarcodeDisplay(): void {
       if (span) span.textContent = String(Math.max(0, remain));
     }, 1000);
     timer = setTimeout(() => {
-      console.log(`[BarcodeDisplay] timeout ${bc.timeoutSec}초 경과 — 대기화면 복귀`);
+      log.info(`[BarcodeDisplay] timeout ${bc.timeoutSec}초 경과 — 대기화면 복귀`);
       clearBarcode();
       navigate("/");
     }, bc.timeoutSec * 1000);
   } else {
-    console.log("[BarcodeDisplay] timeout=00 — 무한 대기 (자동 종료 없음)");
+    log.info("[BarcodeDisplay] timeout=00 — 무한 대기 (자동 종료 없음)");
   }
 
   onCleanup(() => {

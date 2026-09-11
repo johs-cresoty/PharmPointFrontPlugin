@@ -10,6 +10,7 @@ import { AXIOS_BASE_URL, ensureInit } from "./config";
 import { enroll, ensureToken, refresh } from "./auth-service";
 import { TokenStorage } from "./token-storage";
 import { maskPhone } from "../utils/pii-mask";
+import { log } from "../utils/log";
 
 export { POS_COMMON } from "./config";
 
@@ -90,7 +91,7 @@ apiClient.interceptors.request.use(async (config) => {
   const url    = `${config.baseURL ?? ""}${config.url ?? ""}`;
   const params = config.params ? ` params=${safeBody(config.params)}` : "";
   const body   = config.data   ? ` body=${safeBody(config.data)}`     : "";
-  console.debug(`[HTTP] → ${method} ${url}${params}${body}`);
+  log.debug(`[HTTP] → ${method} ${url}${params}${body}`);
   return config;
 });
 
@@ -99,7 +100,7 @@ apiClient.interceptors.response.use(
   (res) => {
     const method = (res.config.method ?? "get").toUpperCase();
     const url    = `${res.config.baseURL ?? ""}${res.config.url ?? ""}`;
-    console.log(`[HTTP] ← ${res.status} ${method} ${url} body=${safeBody(res.data)}`);
+    log.info(`[HTTP] ← ${res.status} ${method} ${url} body=${safeBody(res.data)}`);
     return res;
   },
   async (error: AxiosError) => {
@@ -118,7 +119,7 @@ apiClient.interceptors.response.use(
     }
 
     original._retryAfterAuth = true;
-    console.log("[apiClient] 401 감지, 토큰 재발급 시도");
+    log.info("[apiClient] 401 감지, 토큰 재발급 시도");
     try {
       await refresh();
     } catch (e) {

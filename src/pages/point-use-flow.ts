@@ -14,6 +14,7 @@ import { SocketGateway } from "../pos/socket-gateway";
 import { navigate, onCleanup } from "../router";
 import { mountPhoneOverlay, type PhoneOverlayHandles } from "./overlays";
 import { startInactivityTimeout } from "../features/inactivity/inactivity-timeout";
+import { log } from "../utils/log";
 
 const CTX_KEY = "pharm_use_point_ctx";
 
@@ -73,7 +74,7 @@ export async function renderPointUseFlow(): Promise<void> {
     const payAmountFmt = (ctx.payAmount || 0).toLocaleString("ko-KR");
     const minPointFmt  = cfg.minPoint.toLocaleString("ko-KR");
     const msg = `포인트를 사용할 수 없어요.\r\n결제 금액 ${payAmountFmt}원\r\n최소 사용 포인트 ${minPointFmt}P`;
-    console.log(`[PointUse] 결제금액<최소포인트 사전차단 — payAmount=${ctx.payAmount}, minPoint=${cfg.minPoint}`);
+    log.info(`[PointUse] 결제금액<최소포인트 사전차단 — payAmount=${ctx.payAmount}, minPoint=${cfg.minPoint}`);
     void SocketGateway.sendCATFail(msg);
     clearContext();
     goPayAmountBelowMinPoint({ payAmount: ctx.payAmount || 0, minPoint: cfg.minPoint });
@@ -192,7 +193,7 @@ async function handleLookupResult(
   const insufficient = (cfg.isMinPointEnabled && cfg.minPoint > balance) || balance < 1;
   const storeName = await getStoreName();
 
-  console.log(`[PointUse] 잔액판정 balance=${balance}P, minPoint=${cfg.minPoint}(enabled=${cfg.isMinPointEnabled}) → ${insufficient ? "부족" : "사용가능"} / source=${ctx.source}`);
+  log.info(`[PointUse] 잔액판정 balance=${balance}P, minPoint=${cfg.minPoint}(enabled=${cfg.isMinPointEnabled}) → ${insufficient ? "부족" : "사용가능"} / source=${ctx.source}`);
 
   if (insufficient) {
     void cancelUse({ source: ctx.source, message: CancelMessage.insufficient });

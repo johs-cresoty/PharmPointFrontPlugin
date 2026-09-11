@@ -22,6 +22,7 @@ import { renderResult } from "./pages/result";
 import { renderSettings } from "./pages/settings";
 import { renderPriceDisplay, saveCart, clearCart, updatePriceDisplay } from "./pages/price-display";
 import { renderBarcodeDisplay, saveBarcode, clearBarcode } from "./pages/barcode-display";
+import { log } from "./utils/log";
 
 // ─── 뷰 등록 ────────────────────────────────
 
@@ -79,7 +80,7 @@ async function bootstrap(): Promise<void> {
   // 오류 수집을 가장 먼저 건다 — 이후 초기화 단계에서 터지는 것도 잡아야 한다.
   initMonitoring(__APP_VERSION__);
   // 어느 서버를 보는지 기동 즉시 남긴다 — 개발 서버를 본 채 운영에 나가는 사고 방지.
-  console.log(`[PharmPoint] v${__APP_VERSION__} 기동 — ${API_ENV_LABEL} 서버 (${API_BASE_URL})`);
+  log.info(`[PharmPoint] v${__APP_VERSION__} 기동 — ${API_ENV_LABEL} 서버 (${API_BASE_URL})`);
 
   await ensureInit();
 
@@ -144,7 +145,7 @@ async function bootstrap(): Promise<void> {
       // 판별할 수 없다 → isIdleActive() 로 대기 상태인지 확인한다.
       const path = getCurrentPath();
       if (path !== "/" || !isIdleActive()) {
-        console.log(`[main] 고객 조작 화면 진행 중 — 카트 갱신 무시 (path=${path})`);
+        log.info(`[main] 고객 조작 화면 진행 중 — 카트 갱신 무시 (path=${path})`);
         return;
       }
       saveCart(cart);             // renderPriceDisplay 가 읽을 스냅샷
@@ -152,7 +153,7 @@ async function bootstrap(): Promise<void> {
     },
     // 단말기 005 — 바코드 표시. (006 회신은 AppSession 이 수신 즉시 처리)
     onBarcodeDisplay: (barcode) => {
-      console.log(
+      log.info(
         `[main] 바코드 표시 요청 — ${barcode.kind} timeout=${barcode.timeoutSec}초 ` +
         `데이터=${barcode.dataLength}바이트`,
       );
@@ -164,10 +165,10 @@ async function bootstrap(): Promise<void> {
     onTerminalHideScreen: () => {
       const path = getCurrentPath();
       if (!isTerminalOriginScreen(path)) {
-        console.log(`[main] 999 화면 미노출 — 단말기 유래 화면 아님(path=${path}). 무시`);
+        log.info(`[main] 999 화면 미노출 — 단말기 유래 화면 아님(path=${path}). 무시`);
         return;
       }
-      console.log(`[main] 999 화면 미노출 — ${path} 닫고 대기화면 복귀`);
+      log.info(`[main] 999 화면 미노출 — ${path} 닫고 대기화면 복귀`);
       closeTerminalScreen(path!);
     },
 
@@ -186,7 +187,7 @@ async function bootstrap(): Promise<void> {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "hidden") return;
     if (getCurrentPath() !== "/price-display") return;
-    console.log("[main] 웹뷰 hidden 감지 — 가격표시기 종료(백업)");
+    log.info("[main] 웹뷰 hidden 감지 — 가격표시기 종료(백업)");
     clearCart();
     navigate("/");
   });

@@ -11,6 +11,7 @@
  */
 import { SocketConfig as cfg } from "../socket-config";
 import { maskPiiText } from "../../utils/pii-mask";
+import { log } from "../../utils/log";
 
 export type WebSocketTransportHandlers = {
   onText:   (text: string) => void;
@@ -80,7 +81,7 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
         state.connectionId = connectionId;
         const text = decodePayloadData(data);
         // 전문에 고객 전화번호가 실린다(PHONE_INPUT_ACK 등) — 번호만 가리고 남긴다.
-        console.log(`[WS] 수신 ← ${maskPiiText(text)}`);
+        log.info(`[WS] 수신 ← ${maskPiiText(text)}`);
         try { onText(text); }
         catch (e) { onError?.(e); }
       },
@@ -111,7 +112,7 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
       console.warn("[WS] 송신 실패 — 연결 없음");
       return;
     }
-    console.log(`[WS] 송신 → ${maskPiiText(text)}`);
+    log.info(`[WS] 송신 → ${maskPiiText(text)}`);
     await state.handle.send(state.connectionId, encodeSendData(text));
   }
 

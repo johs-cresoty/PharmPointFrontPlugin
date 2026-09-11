@@ -17,6 +17,7 @@
 import { SocketConfig as cfg } from "../socket-config";
 import { SocketConstants as C } from "../protocol/socket-constants";
 import { findPiiByteRanges } from "../../utils/pii-mask";
+import { log } from "../../utils/log";
 
 // 버퍼 상한 — TRM 시그니처를 못 찾고 과다 누적되는 상황 방어.
 const MAX_BUFFER_BYTES = 4096;
@@ -92,8 +93,8 @@ function createFoldedLogger(): (line: string) => void {
   let repeat   = 0;
   return (line: string): void => {
     if (line === lastLine) { repeat += 1; return; }
-    if (repeat > 0) console.debug(`[serial] ↑ 같은 전문 ${repeat}회 반복`);
-    console.debug(`[serial] ${line}`);
+    if (repeat > 0) log.debug(`[serial] ↑ 같은 전문 ${repeat}회 반복`);
+    log.debug(`[serial] ${line}`);
     lastLine = line;
     repeat   = 0;
   };
@@ -173,10 +174,10 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
       link.alive        = true;
       link.lastAliveLog = now;
       link.rxSinceLog   = 1;
-      console.log("[연동] ✅ 단말기 신호 수신 — 시리얼 연결 정상");
+      log.info("[연동] ✅ 단말기 신호 수신 — 시리얼 연결 정상");
     } else if (now - link.lastAliveLog >= LINK_ALIVE_LOG_MS) {
       const sec = Math.round((now - link.lastAliveLog) / 1000);
-      console.debug(`[연동] 단말기 신호 유지 중 — 최근 ${sec}초간 ${link.rxSinceLog}건 수신`);
+      log.debug(`[연동] 단말기 신호 유지 중 — 최근 ${sec}초간 ${link.rxSinceLog}건 수신`);
       link.lastAliveLog = now;
       link.rxSinceLog   = 0;
     }
@@ -339,7 +340,7 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
       Promise.resolve(sdk.serial.open({ baudRate: cfg.baudRate, intercept: true }))
         .then(() => {
           clearTimeout(openWatchdog);
-          console.log(`[serial] open OK — baudRate=${cfg.baudRate}, intercept=true`);
+          log.info(`[serial] open OK — baudRate=${cfg.baudRate}, intercept=true`);
         })
         .catch((e) => {
           clearTimeout(openWatchdog);
@@ -386,7 +387,7 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
     state.unlisten = null;
     try {
       await withTimeout(sdk.serial.close(), 2000, "close");
-      console.log("[serial] close 완료 — 포트 반납");
+      log.info("[serial] close 완료 — 포트 반납");
     } catch (e) {
       console.warn("[serial] close 실패", e);
     } finally {

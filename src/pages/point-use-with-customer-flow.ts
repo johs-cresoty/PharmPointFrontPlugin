@@ -7,6 +7,7 @@ import { goInsufficient, goPayAmountBelowMinPoint, goUseSuccess } from "../featu
 import { navigate, onCleanup } from "../router";
 import { startInactivityTimeout } from "../features/inactivity/inactivity-timeout";
 import { getInactivityTimeoutSeconds } from "../features/app-config/app-config.service";
+import { log } from "../utils/log";
 
 const CTX_KEY = "pharm_use_point_with_customer_ctx";
 
@@ -54,7 +55,7 @@ export async function renderPointUseWithCustomerFlow(): Promise<void> {
     const payAmountFmt = payAmount.toLocaleString("ko-KR");
     const minPointFmt  = ctx.minPoint.toLocaleString("ko-KR");
     const msg = `포인트를 사용할 수 없어요.\r\n결제 금액 ${payAmountFmt}원\r\n최소 사용 포인트 ${minPointFmt}P`;
-    console.log(`[PointUseWithCustomer] 결제금액<최소포인트 사전차단 — payAmount=${payAmount}, minPoint=${ctx.minPoint}`);
+    log.info(`[PointUseWithCustomer] 결제금액<최소포인트 사전차단 — payAmount=${payAmount}, minPoint=${ctx.minPoint}`);
     void cancelUse({ source: ctx.source, message: msg });
     clearContext();
     goPayAmountBelowMinPoint({ payAmount, minPoint: ctx.minPoint });

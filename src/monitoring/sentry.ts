@@ -17,6 +17,7 @@
  */
 import * as Sentry from "@sentry/browser";
 import { maskPiiText } from "../utils/pii-mask";
+import { log } from "../utils/log";
 
 /**
  * Sentry 프로젝트 DSN. 비워두면 수집하지 않는다.
@@ -45,7 +46,7 @@ function scrub<T>(event: T): T {
 
 export function initMonitoring(version: string): void {
   if (!SENTRY_DSN) {
-    console.debug("[Sentry] DSN 미설정 — 로그 수집 비활성");
+    log.debug("[Sentry] DSN 미설정 — 로그 수집 비활성");
     return;
   }
 
@@ -56,27 +57,21 @@ export function initMonitoring(version: string): void {
     // Logs 기능 활성화. 이것만으로는 콘솔 출력이 올라가지 않는다 —
     // enableLogs 는 Sentry.logger API 를 여는 것이고, console.* 를 Logs 로 보내려면
     // 아래 consoleLoggingIntegration 이 따로 필요하다.
-    enableLogs: true,
-    integrations: [
-      // ── 로그 등급 ──────────────────────────────────────
-      // 여기 levels 가 두 등급을 가른다.
-      //
-      //   console.log / warn / error  → 단말기 로그 뷰어 + Sentry
-      //       사건이 지난 뒤에도 봐야 하는 것. 기동, 연동 성립·끊김,
-      //       전문 송수신, HTTP 응답, 모든 경고·오류.
-      //
-      //   console.debug               → 단말기 로그 뷰어에만
-      //       실시간으로 볼 때만 쓸모 있는 고빈도 기록. 신호 유지 알림(1분 주기),
-      //       시리얼 프레임 덤프, HTTP 요청 라인.
-      //
-      // debug 를 올리지 않는 이유는 양이다. 신호 유지 알림만 해도 단말 1대당
-      // 하루 1,440건이라, 매장이 늘면 정작 봐야 할 기록이 한도에 밀려 사라진다.
-      Sentry.consoleLoggingIntegration({ levels: ["log", "warn", "error"] }),
-    ],
+    // ── 무엇을 올리는가 ────────────────────────────────
+    //
+    // 오류만 올린다. 평상시 로그는 올리지 않는다.
+    //
+    // 대신 오류가 발생하면 직전 기록이 breadcrumb 으로 함께 붙어 올라간다.
+    // (console.warn/error, HTTP 호출, 화면 전환 등을 SDK 가 자동으로 모아둔다)
+    // 그래서 "무엇이 터졌는지"와 "그 직전에 무슨 일이 있었는지"를 같이 볼 수 있다.
+    //
+    // consoleLoggingIntegration 은 일부러 넣지 않는다. 그걸 넣으면 평상시 로그가
+    // 전부 독립 항목으로 쌓여, 정작 봐야 할 오류가 묻히고 한도만 소진된다.
+    enableLogs: false,
 
-    beforeSend:    (event) => scrub(event),
-    beforeSendLog: (log)   => scrub(log),
+    beforeSend:       (event) => scrub(event),
+    beforeBreadcrumb: (crumb) => scrub(crumb),
   });
 
-  console.debug(`[Sentry] 로그 수집 시작 — release=${PLUGIN_ID}@${version}`);
+  log.debug(`[Sentry] 로그 수집 시작 — release=${PLUGIN_ID}@${version}`);
 }

@@ -10,6 +10,7 @@
 import axios, { type AxiosError } from "axios";
 import { API_BASE_URL, ensureInit, readAuthContext } from "./config";
 import { TokenStorage } from "./token-storage";
+import { log } from "../utils/log";
 
 const ENROLL_PATH  = "/api/v1/point/auth/enroll";
 const REFRESH_PATH = "/api/v1/point/auth/token";
@@ -30,17 +31,17 @@ type AuthResponse = {
  */
 async function postWithLog<T>(path: string, body: unknown): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
-  console.debug(`[HTTP] → POST ${url}`);
+  log.debug(`[HTTP] → POST ${url}`);
   try {
     const res = await axios.post<T>(url, body, {
       headers: { "Content-Type": "application/json; charset=UTF-8" },
     });
-    console.log(`[HTTP] ← ${res.status} POST ${url}`);
+    log.info(`[HTTP] ← ${res.status} POST ${url}`);
     return res.data;
   } catch (err) {
     const ax = err as AxiosError;
     if (ax.response) {
-      console.log(`[HTTP] ← ${ax.response.status} POST ${url}`);
+      log.info(`[HTTP] ← ${ax.response.status} POST ${url}`);
     }
     throw err;
   }

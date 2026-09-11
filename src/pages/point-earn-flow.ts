@@ -15,6 +15,7 @@ import { navigate, onCleanup } from "../router";
 import { mountPayHeader, mountConfirmFooter } from "./overlays";
 import { startInactivityTimeout } from "../features/inactivity/inactivity-timeout";
 import { getInactivityTimeoutSeconds } from "../features/app-config/app-config.service";
+import { log } from "../utils/log";
 
 const CTX_KEY = "pharm_earn_point_ctx";
 
@@ -79,7 +80,7 @@ export async function renderPointEarnFlow(): Promise<void> {
   void estimatePromise.then((est) => {
     const p = est.success && est.data ? parseInt(String(est.data.pointAmount ?? "0"), 10) || 0 : 0;
     if (p > 0) header.setEstimate(`${p.toLocaleString()}P 적립예상`);
-    else       console.log(`[earn-flow] 적립예상 미표시 (success=${est.success}, point=${p})`);
+    else       log.info(`[earn-flow] 적립예상 미표시 (success=${est.success}, point=${p})`);
   });
 
   sdk.template.renderInputPage({
