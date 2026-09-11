@@ -92,6 +92,22 @@ export function initMonitoring(version: string): void {
     // 전부 독립 항목으로 쌓여, 정작 봐야 할 오류가 묻히고 한도만 소진된다.
     enableLogs: false,
 
+    // 오류에 함께 붙일 직전 기록 개수. 메모리에만 들고 있고 앱을 끄면 사라진다.
+    // 101번째가 생기면 가장 오래된 1건이 밀려나므로, 한 달을 켜두든 방금 켜든
+    // 올라가는 양은 항상 이 개수다.
+    //
+    // 거래 1건에 6~10줄이라 100건이면 최근 거래 열 건 남짓이 담긴다.
+    // 문의는 대개 "방금 안 됐다" 라서 이 범위면 충분하다.
+    maxBreadcrumbs: 100,
+
+    integrations: [
+      // 화면 터치는 기록하지 않는다(dom: false).
+      // 번호 입력이 키패드라 전화번호 한 번에 터치만 11건이 쌓이고,
+      // 그러면 정작 봐야 할 연동 기록이 100건 밖으로 밀려난다.
+      // 어느 버튼을 눌렀는지보다 전문이 오갔는지가 중요하다.
+      Sentry.breadcrumbsIntegration({ dom: false }),
+    ],
+
     beforeSend:       (event) => scrub(event),
     beforeBreadcrumb: (crumb) => scrub(crumb),
   });
