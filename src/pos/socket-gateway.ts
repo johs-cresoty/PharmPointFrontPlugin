@@ -204,8 +204,24 @@ function create() {
       onError: (e) => console.error("[SocketGateway] serial error", e),
     });
     van = createVanTransport(); // KIS 전문 → VAN 전달 (write only)
+
+    // ⚠️ SDK 호출이 성공도 실패도 하지 않고 멈추는 사례가 있다(시리얼 open 에서 관측).
+    //    그 상태로 await 하면 아래 '채널 기동' 줄까지 영영 도달하지 못해,
+    //    로그만 보면 앱이 조용히 죽은 것처럼 보이고 원인을 짚을 수 없다.
+    //    무응답도 결과의 하나로 보고 넘어간다.
+    const withWatchdog = (p: Promise<void>, label: string): Promise<void> =>
+      Promise.race([
+        p,
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error(`${label} 10초 무응답 — SDK 가 응답하지 않음`)), 10_000),
+        ),
+      ]);
+
     // allSettled 는 실패를 삼키므로, 어느 채널이 못 떴는지 반드시 로그로 남긴다.
-    const [wsRes, serRes] = await Promise.allSettled([ws.start(), ser.start()]);
+    const [wsRes, serRes] = await Promise.allSettled([
+      withWatchdog(ws.start(),  "웹소켓 기동"),
+      withWatchdog(ser.start(), "시리얼 기동"),
+    ]);
     if (wsRes.status  === "rejected") console.error("[연동] ❌ 웹소켓 서버 기동 실패 — 캣포스가 접속할 수 없다", wsRes.reason);
     if (serRes.status === "rejected") console.error("[연동] ❌ 시리얼 기동 실패 — 단말기 전문을 받을 수 없다", serRes.reason);
     // 두 채널 기동 결과를 한 줄로 모아둔다. 여러 줄에 흩어진 로그를 훑지 않아도
