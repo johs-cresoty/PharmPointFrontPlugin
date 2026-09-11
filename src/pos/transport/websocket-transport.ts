@@ -161,8 +161,11 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
 
   async function send(text: string): Promise<void> {
     if (!state.connectionId || !state.handle) {
-      console.warn("[WS] 송신 실패 — 연결 없음");
-      return;
+      // 캣포스는 전문을 보내고 바로 끊는다. 고객이 번호·금액을 입력하는 동안
+      // 연결이 사라지면 응답이 갈 곳이 없다 — 적립은 응답이 필요 없지만
+      // 조회·사용·마케팅 동의는 캣포스가 기다리고 있어 그대로 멈춘다.
+      // 어느 응답이 날아갔는지 호출부(sendCAT)가 커맨드와 함께 남긴다.
+      throw new Error("캣포스 연결이 없어 응답을 보내지 못했습니다");
     }
     log.info(`[WS] 송신 → ${maskPiiText(text)}`);
     await state.handle.send(state.connectionId, encodeSendData(text));

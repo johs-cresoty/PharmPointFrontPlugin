@@ -279,18 +279,48 @@ function create() {
 
   // ── CATPOS(PC) 응답 송신 ────────────────────
 
+  /**
+   * 캣포스가 회신을 기다리는 커맨드인지.
+   *
+   * 적립은 응답이 없어도 캣포스가 제 갈 길을 간다. 반면 조회·사용·마케팅 동의는
+   * 회신을 받아야 다음으로 넘어가므로, 못 보내면 계산대가 그대로 멈춘다.
+   * 취소 통보(FAIL)는 못 보내도 캣포스가 자체 타임아웃으로 푼다.
+   */
+  function isAwaitedReply(cmd: string | undefined): boolean {
+    switch (cmd) {
+      case C.CATPOS_PHONE_INPUT_ACK:
+      case C.CATPOS_CUSTOMER_REGISTER_ACK:
+      case C.CATPOS_USE_POINT_ACK:
+      case C.CATPOS_USE_POINT_WITH_CUSTOMER_ACK:
+      case C.CATPOS_MARKETING_CONSENT_ACK:
+        return true;
+      default:
+        return false;
+    }
+  }
+
   function sendCAT(text: string): Promise<void> {
+    const cmd = CatposCodec.parse(text)?.command;
+
+    const onSendFailure = (reason: unknown): void => {
+      const label = cmd ? catCommandLabel(cmd) : "형식 오류";
+      log.status(`[연동] ❌ 캣포스로 응답 못 보냄 — ${label}`);
+      // 캣포스가 기다리는 회신이 날아가면 계산대가 멈춘다. 이건 올려야 한다.
+      if (isAwaitedReply(cmd)) {
+        reportLinkFailure(`캣포스 응답 전달 실패 — ${label}. 계산대가 대기 상태로 멈출 수 있습니다`, reason);
+      }
+    };
+
     if (!ws) {
-      console.warn("[연동] 캣포스로 응답하지 못했습니다 — 연결이 없습니다");
+      onSendFailure("웹소켓 미기동");
       return Promise.resolve();
     }
     // 요청은 받았는데 응답을 못 보낸 경우를 가르기 위해 커맨드만 남긴다.
-    const sentCmd = CatposCodec.parse(text)?.command;
-    // CONNECT_ACK 은 위 CONNECT 와 짝을 이루는 인사치레라 함께 뺀다.
-    if (sentCmd !== C.CATPOS_CONNECT_ACK) {
-      log.status(`[연동] 캣포스로 응답 보냄 — ${sentCmd ? catCommandLabel(sentCmd) : "형식 오류"}`);
+    // CONNECT_ACK 은 CONNECT 와 짝을 이루는 인사치레라 뺀다.
+    if (cmd !== C.CATPOS_CONNECT_ACK) {
+      log.status(`[연동] 캣포스로 응답 보냄 — ${cmd ? catCommandLabel(cmd) : "형식 오류"}`);
     }
-    return ws.send(text);
+    return ws.send(text).catch(onSendFailure);
   }
 
   function sendCATOk():                                                                Promise<void> { return sendCAT(CatposCodec.ok()); }
