@@ -19,20 +19,28 @@ type AuthResponse = {
   refreshToken?: string;
 };
 
-/** raw axios 호출용 로그 헬퍼 — apiClient 인터셉터를 안 거치므로 여기서 직접 남긴다. */
+/**
+ * raw axios 호출용 로그 헬퍼 — apiClient 인터셉터를 안 거치므로 여기서 직접 남긴다.
+ *
+ * ⚠️ 본문을 찍지 않는다. 이 경로의 응답이 곧 { token, refreshToken } 이라
+ *    본문을 남기면 액세스 토큰과 리프레시 토큰이 그대로 콘솔에 남는다.
+ *    (토스 운영 가이드가 수집 대상에서 제외하라고 명시한 항목)
+ *    진단에 필요한 건 어느 요청이 몇 번으로 끝났는지이므로 상태 코드만 남긴다.
+ *    실패 사유는 본문이 아니라 상태 코드와 호출부 로그로 판단한다.
+ */
 async function postWithLog<T>(path: string, body: unknown): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
-  console.log(`[HTTP] → POST ${url} body=${JSON.stringify(body)}`);
+  console.log(`[HTTP] → POST ${url}`);
   try {
     const res = await axios.post<T>(url, body, {
       headers: { "Content-Type": "application/json; charset=UTF-8" },
     });
-    console.log(`[HTTP] ← ${res.status} POST ${url} body=${JSON.stringify(res.data)}`);
+    console.log(`[HTTP] ← ${res.status} POST ${url}`);
     return res.data;
   } catch (err) {
     const ax = err as AxiosError;
     if (ax.response) {
-      console.log(`[HTTP] ← ${ax.response.status} POST ${url} body=${JSON.stringify(ax.response.data)}`);
+      console.log(`[HTTP] ← ${ax.response.status} POST ${url}`);
     }
     throw err;
   }

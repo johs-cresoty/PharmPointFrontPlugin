@@ -18,8 +18,9 @@ import { SocketEvent, type SocketEventType } from "./socket-events";
 import * as CatposCodec from "./protocol/catpos-codec";
 import * as TerminalCodec from "./protocol/terminal-codec";
 import { createWebSocketTransport, type WebSocketTransport } from "./transport/websocket-transport";
-import { createSerialTransport, toHex, type SerialTransport } from "./transport/serial-transport";
+import { createSerialTransport, toHexMasked, type SerialTransport } from "./transport/serial-transport";
 import { createVanTransport, type VanTransport } from "./transport/van-transport";
+import { maskPiiText } from "../utils/pii-mask";
 
 // ── 이벤트 payload 타입 ───────────────────────────
 
@@ -138,21 +139,21 @@ function create() {
     }
     // 진입 즉시 원문부터 남긴다 — 아래 어느 분기로 빠지든(세션 차단·파싱 실패·미지원 커맨드)
     // 단말기가 실제로 뭘 보냈는지는 항상 확인 가능해야 한다.
-    console.log(`[SocketGateway] <= TRM RAW (${frame.length} bytes) ${toHex(frame)}`);
+    console.log(`[SocketGateway] <= TRM RAW (${frame.length} bytes) ${toHexMasked(frame)}`);
 
     if (catSessionActive) {
-      console.warn(`[SocketGateway] CAT 세션 활성 — 단말기 전문 무시 (${toHex(frame)})`);
+      console.warn(`[SocketGateway] CAT 세션 활성 — 단말기 전문 무시 (${toHexMasked(frame)})`);
       return; // CAT 세션 활성 중에는 단말기 신호 차단 (Android 동일)
     }
 
     const parsed = TerminalCodec.parse(frame);
     if (!parsed) {
-      console.warn(`[SocketGateway] TRM 파싱 실패 — ${toHex(frame)}`);
+      console.warn(`[SocketGateway] TRM 파싱 실패 — ${toHexMasked(frame)}`);
       return;
     }
     // ACK 자동 회신 (Android SocketManager 동일)
     const ackBytes = TerminalCodec.ack();
-    console.log(`[SocketGateway] => ACK ${toHex(ackBytes)}`);
+    console.log(`[SocketGateway] => ACK ${toHexMasked(ackBytes)}`);
     ser?.send(ackBytes).catch((e) => console.error("[SocketGateway] ACK send fail", e));
 
     // 005(바코드 표시)는 길이 필드가 BCD 바이너리라 fields(EUC-KR 디코딩)로 읽을 수 없다.
@@ -160,7 +161,7 @@ function create() {
     if (parsed.cmd === C.TERMINAL_COMMAND_005) {
       const barcode = TerminalCodec.parseBarcodeDisplay(frame);
       if (!barcode) {
-        console.warn(`[SocketGateway] 005 파싱 실패 — ${toHex(frame)}`);
+        console.warn(`[SocketGateway] 005 파싱 실패 — ${toHexMasked(frame)}`);
         return;
       }
       console.log(
@@ -172,7 +173,8 @@ function create() {
       return;
     }
 
-    console.log(`[SocketGateway] <= TRM cmd=${parsed.cmd} fields=${JSON.stringify(parsed.fields)}`);
+    // 필드는 커맨드마다 구성이 달라 키 기반으로 가릴 수 없다. 값 패턴으로 번호만 가린다.
+    console.log(`[SocketGateway] <= TRM cmd=${parsed.cmd} fields=${maskPiiText(JSON.stringify(parsed.fields))}`);
 
     const event = mapTerminalCommandToEvent(parsed.cmd);
     if (!event) {
@@ -261,7 +263,7 @@ function create() {
       console.warn(`[SocketGateway] ⚠️ ${label} 송신 불가 — 시리얼 미기동(ser=null)`);
       return Promise.resolve();
     }
-    console.log(`[SocketGateway] => ${label} ${toHex(bytes)}`);
+    console.log(`[SocketGateway] => ${label} ${toHexMasked(bytes)}`);
     return ser.send(bytes).catch((e) => {
       console.error(`[SocketGateway] ❌ ${label} 송신 실패`, e);
     });

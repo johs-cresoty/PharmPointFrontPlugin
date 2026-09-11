@@ -16,6 +16,7 @@
  */
 import { SocketConfig as cfg } from "../socket-config";
 import { SocketConstants as C } from "../protocol/socket-constants";
+import { findPiiByteRanges } from "../../utils/pii-mask";
 
 // 버퍼 상한 — TRM 시그니처를 못 찾고 과다 누적되는 상황 방어.
 const MAX_BUFFER_BYTES = 4096;
@@ -40,6 +41,26 @@ export type SerialTransport = {
 // 바이트 로그용 — hex / 가독 텍스트 변환 (게이트웨이 브릿지 로그에서 재사용).
 export function toHex(bytes: Uint8Array): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0").toUpperCase()).join(" ");
+}
+
+/**
+ * 로그용 hex 덤프 — 휴대폰 번호에 해당하는 바이트를 "**" 로 가린다.
+ *
+ * 004(사용결과) 같은 전문에는 고객 전화번호가 ASCII 로 들어간다.
+ * 프레임 구조(STX·마커·길이·플래그·CMD·FS·ETX·LRC)는 그대로 보여 진단 가치를 유지하면서
+ * 개인정보만 제거한다. 로그에 남는 hex 는 전부 이 함수를 거친다.
+ */
+export function toHexMasked(bytes: Uint8Array): string {
+  const ranges = findPiiByteRanges(bytes);
+  if (ranges.length === 0) return toHex(bytes);
+
+  const masked = new Set<number>();
+  for (const [start, end] of ranges) {
+    for (let i = start; i < end; i++) masked.add(i);
+  }
+  return Array.from(bytes, (b, i) =>
+    masked.has(i) ? "**" : b.toString(16).padStart(2, "0").toUpperCase(),
+  ).join(" ");
 }
 export function toReadable(bytes: Uint8Array): string {
   return Array.from(bytes, (b) => (b >= 0x20 && b < 0x7f ? String.fromCharCode(b) : ".")).join("");
@@ -181,7 +202,7 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
     // 게이트웨이까지 못 가므로, 어디로 빠졌는지 반드시 보이게 남긴다.
     // 팜포인트 전문 조건(STX + "XX" + 숫자4)을 어디서 벗어났는지 함께 적어,
     // 결제 전문이라 넘긴 것인지 팜포인트 전문이 마커 없이 와서 샌 것인지 구분한다.
-    logVan(`-> 결제모듈(VAN) 전달 — ${vanReason(bytes)} (${bytes.length} bytes) ${toHex(bytes)}`);
+    logVan(`-> 결제모듈(VAN) 전달 — ${vanReason(bytes)} (${bytes.length} bytes) ${toHexMasked(bytes)}`);
     try { onVanForward?.(bytes); }
     catch (e) { onError?.(e); }
   }
@@ -342,7 +363,7 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
       // 시리얼로 들어온 원본 chunk — TRM/KIS 판별 전 단계. 단말기가 보낸 건 전부 여기 찍힌다.
       // 길이는 hex 와 헷갈리지 않게 괄호로 분리한다 ("5B" 를 0x5B 로 오독하는 것 방지).
       // 반복되는 폴링 전문은 접어서 횟수로만 남긴다.
-      logRx(`<= RX (${u8.length} bytes) ${toHex(u8)}`);
+      logRx(`<= RX (${u8.length} bytes) ${toHexMasked(u8)}`);
       try {
         appendBuffer(u8);
         processBuffer(); // TRM → onFrame, KIS → onVanForward
@@ -381,13 +402,13 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
   async function send(bytes: Uint8Array | number[]): Promise<void> {
     const u8 = bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes);
     if (!state.opened) {
-      console.warn(`[serial] ⚠️ TX 취소 — 포트 미오픈. 폐기 (${u8.length} bytes) ${toHex(u8)}`);
+      console.warn(`[serial] ⚠️ TX 취소 — 포트 미오픈. 폐기 (${u8.length} bytes) ${toHexMasked(u8)}`);
       return;
     }
     try {
       await sdk.serial.write({ data: u8 });
     } catch (e) {
-      console.error(`[serial] ❌ TX 실패 (${u8.length} bytes) ${toHex(u8)}`, e);
+      console.error(`[serial] ❌ TX 실패 (${u8.length} bytes) ${toHexMasked(u8)}`, e);
       throw e;
     }
   }
