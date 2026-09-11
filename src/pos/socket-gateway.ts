@@ -280,19 +280,19 @@ function create() {
   // ── CATPOS(PC) 응답 송신 ────────────────────
 
   /**
-   * 캣포스가 회신을 기다리는 커맨드인지.
+   * 캣포스가 이 회신을 받아야 다음으로 넘어가는지.
    *
-   * 적립은 응답이 없어도 캣포스가 제 갈 길을 간다. 반면 조회·사용·마케팅 동의는
-   * 회신을 받아야 다음으로 넘어가므로, 못 보내면 계산대가 그대로 멈춘다.
-   * 취소 통보(FAIL)는 못 보내도 캣포스가 자체 타임아웃으로 푼다.
+   * 적립에는 결과 응답이 아예 없다(회신하는 코드 자체가 없다). 캣포스가 기다리지
+   * 않으므로 여기 해당하지 않는다. 취소 통보(FAIL)는 못 보내도 캣포스가 자체
+   * 타임아웃으로 푼다. 아래 다섯은 다르다 — 못 받으면 캣포스가 계속 기다린다.
    */
   function isAwaitedReply(cmd: string | undefined): boolean {
     switch (cmd) {
-      case C.CATPOS_PHONE_INPUT_ACK:
-      case C.CATPOS_CUSTOMER_REGISTER_ACK:
-      case C.CATPOS_USE_POINT_ACK:
-      case C.CATPOS_USE_POINT_WITH_CUSTOMER_ACK:
-      case C.CATPOS_MARKETING_CONSENT_ACK:
+      case C.CATPOS_PHONE_INPUT_ACK:              // 번호 조회 결과
+      case C.CATPOS_CUSTOMER_REGISTER_ACK:        // 회원 조회 결과
+      case C.CATPOS_USE_POINT_ACK:                // 포인트 사용 결과
+      case C.CATPOS_USE_POINT_WITH_CUSTOMER_ACK:  // 포인트 사용 결과(회원 지정)
+      case C.CATPOS_MARKETING_CONSENT_ACK:        // 마케팅 동의 결과
         return true;
       default:
         return false;
@@ -304,10 +304,13 @@ function create() {
 
     const onSendFailure = (reason: unknown): void => {
       const label = cmd ? catCommandLabel(cmd) : "형식 오류";
-      log.status(`[연동] ❌ 캣포스로 응답 못 보냄 — ${label}`);
+      log.status(`[연동] ❌ 캣포스에 못 보냄 — ${label}`);
       // 캣포스가 기다리는 회신이 날아가면 계산대가 멈춘다. 이건 올려야 한다.
       if (isAwaitedReply(cmd)) {
-        reportLinkFailure(`캣포스 응답 전달 실패 — ${label}. 계산대가 대기 상태로 멈출 수 있습니다`, reason);
+        reportLinkFailure(
+          `고객 화면은 끝났는데 캣포스가 결과를 못 받았습니다 — ${label}. 캣포스가 계속 기다립니다`,
+          reason,
+        );
       }
     };
 
