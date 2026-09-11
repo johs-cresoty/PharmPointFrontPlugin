@@ -18,8 +18,13 @@
 import * as Sentry from "@sentry/browser";
 import { maskPiiText } from "../utils/pii-mask";
 
-/** Sentry 프로젝트 DSN. 비워두면 수집하지 않는다. */
-const SENTRY_DSN = "";
+/**
+ * Sentry 프로젝트 DSN. 비워두면 수집하지 않는다.
+ *
+ * 공개되어도 되는 값이다 — 브라우저 코드에 실려 나가므로 어차피 노출된다.
+ * 이 값으로는 이벤트를 보낼 수만 있고 읽을 수는 없다.
+ */
+const SENTRY_DSN = "https://2e9f04fd9a6f958ce7c57f3143b9e78c@o4512065324318720.ingest.us.sentry.io/4512065354334208";
 
 /** 개발자센터에 등록된 플러그인 ID. release 태그 앞부분. */
 const PLUGIN_ID = "cresoty-pharmpoint";
