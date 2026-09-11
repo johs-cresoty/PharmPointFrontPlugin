@@ -168,7 +168,8 @@ function draw(el: HTMLElement, bc: BarcodeDisplayData): void {
     if (ean) {
       parts.push(buildEan13Svg(ean, "bc-1d"));
     } else {
-      console.warn(`[BarcodeDisplay] EAN-13 인코딩 실패 — 데이터="${bc.data}"`);
+      // 바코드 데이터 자체는 남기지 않는다 — 회원번호·쿠폰코드가 실릴 수 있다.
+      console.warn(`[BarcodeDisplay] EAN-13 인코딩 실패 — ${bc.data.length}자리`);
       parts.push(
         `<div class="bc-fallback"><span class="bc-fallback-title">EAN-13 형식 오류</span>` +
         `${escapeHtml(bc.data)}</div>`,

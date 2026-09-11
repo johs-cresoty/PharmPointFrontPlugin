@@ -140,7 +140,7 @@ function create() {
     }
 
     if (catSessionActive) {
-      console.warn(`[SocketGateway] CAT 세션 활성 — 단말기 전문 무시 (${toHexMasked(frame)})`);
+      log.debug(`[SocketGateway] CAT 세션 활성 — 단말기 전문 무시 (${toHexMasked(frame)})`);
       return; // CAT 세션 활성 중에는 단말기 신호 차단 (Android 동일)
     }
 

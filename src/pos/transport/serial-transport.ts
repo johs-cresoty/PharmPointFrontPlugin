@@ -221,7 +221,7 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
     state.idleTimer = setTimeout(() => {
       state.idleTimer = null;
       if (state.buffer.length > 0) {
-        console.warn(`[serial] 수신 타임아웃 — 잔여 (${state.buffer.length} bytes) VAN 중계`);
+        log.debug(`[serial] 수신 타임아웃 — 잔여 (${state.buffer.length} bytes) VAN 중계`);
         forwardVan(state.buffer);
         state.buffer = new Uint8Array(0);
       }
@@ -333,7 +333,7 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
     //    await 하면 아래 listen 등록 줄까지 도달하지 못해 수신이 영영 불가능해진다.
     //    포트 자체는 열려 있을 수 있으므로 응답을 기다리지 말고 리스너부터 건다.
     const openWatchdog = setTimeout(() => {
-      console.warn("[serial] ⚠️ open 5초 무응답 — 응답을 기다리지 않고 리스너로 수신 시도 중");
+      log.debug("[serial] open 응답 대기 생략 — 리스너로 수신 진행");
     }, 5000);
     try {
       // 결과는 로그로만 관찰한다(진행을 막지 않음). 동기 throw 도 잡는다.
