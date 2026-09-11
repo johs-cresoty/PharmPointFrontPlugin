@@ -17,7 +17,7 @@
  */
 import * as Sentry from "@sentry/browser";
 import { maskPiiText } from "../utils/pii-mask";
-import { log } from "../utils/log";
+import { log, readLinkLog } from "../utils/log";
 
 /**
  * Sentry 프로젝트 DSN. 비워두면 수집하지 않는다.
@@ -93,7 +93,17 @@ export function sendDiagnostic(): boolean {
   if (now - lastDiagnosticAt < DIAGNOSTIC_COOLDOWN_MS) return false;
   lastDiagnosticAt = now;
 
-  Sentry.captureMessage("진단 보내기 — 사용자가 요청한 상태 보고", "info");
+  // 설정 화면(settings.html)은 포인트 화면과 실행 환경이 달라 breadcrumb 이 비어 있다.
+  // 두 화면이 함께 읽는 곳에 따로 보관해 둔 연동 기록을 실어 보낸다.
+  const linkLog = readLinkLog();
+
+  Sentry.captureMessage("진단 보내기 — 사용자가 요청한 상태 보고", {
+    level: "info",
+    extra: {
+      "연동 기록": linkLog.length ? linkLog.join("\n") : "(기록 없음 — 플러그인이 재시작된 직후일 수 있습니다)",
+      "기록 줄수": linkLog.length,
+    },
+  });
   return true;
 }
 
