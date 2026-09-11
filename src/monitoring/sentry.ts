@@ -70,6 +70,33 @@ export function reportLinkFailure(message: string, detail?: unknown): void {
   });
 }
 
+/** 진단 보내기 연타 방지 — 이 시간 안에 다시 누르면 무시한다. */
+const DIAGNOSTIC_COOLDOWN_MS = 60_000;
+let lastDiagnosticAt = 0;
+
+/**
+ * 최근 상황을 Sentry 로 한 번 올린다 (설정 화면 '진단 보내기').
+ *
+ * 약국에서 "안 된다"는 문의가 왔을 때 쓰는 수단이다.
+ * 연동이 안 되는 상황은 대부분 오류가 아니라 '아무 일도 안 일어나는' 상태라
+ * 자동으로는 아무것도 올라가지 않는다. 그래서 사람이 눌러 올린다.
+ *
+ * 보내는 것은 이 시점의 breadcrumb(최근 100건)과 매장 태그뿐이다.
+ * 로그는 메모리에만 쌓이고 상한이 있어, 오래 켜뒀어도 양은 늘 같다.
+ *
+ * @returns 전송했으면 true. 수집이 꺼져 있거나 연타면 false.
+ */
+export function sendDiagnostic(): boolean {
+  if (!SENTRY_DSN) return false;
+
+  const now = Date.now();
+  if (now - lastDiagnosticAt < DIAGNOSTIC_COOLDOWN_MS) return false;
+  lastDiagnosticAt = now;
+
+  Sentry.captureMessage("진단 보내기 — 사용자가 요청한 상태 보고", "info");
+  return true;
+}
+
 export function initMonitoring(version: string): void {
   if (!SENTRY_DSN) {
     log.debug("[Sentry] DSN 미설정 — 로그 수집 비활성");

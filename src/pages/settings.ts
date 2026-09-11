@@ -17,6 +17,7 @@ import { getInactivityTimeoutSeconds, getMinPoint, getResultTimeoutSeconds, getS
 import { showInactivityTimeoutSaved, showMinPointSaved, showTimeoutSaved } from "../features/result-page/result-page.service";
 import { StorageKeys } from "../shared/constants/storage-keys";
 import { navigate, onCleanup } from "../router";
+import { sendDiagnostic } from "../monitoring/sentry";
 
 const CONTAINER_ID = "pharm-settings-container";
 const STYLE_ID     = "pharm-settings-style";
@@ -104,6 +105,10 @@ function mountContainer(): HTMLElement {
         <option value="115200">115200</option>
         <option value="38400">38400</option>
       </select>
+    </div>
+    <div class="setting-row" id="s-diag-row">
+      <span class="setting-label">진단 보내기</span>
+      <span class="setting-value" id="s-diag">눌러서 전송</span>
     </div>
   `;
   document.body.appendChild(el);
@@ -275,5 +280,21 @@ export async function renderSettings(): Promise<void> {
   (document.getElementById("s-baud") as HTMLSelectElement).addEventListener("change", async (e) => {
     const value = (e.target as HTMLSelectElement).value;
     await sdk.storage.set({ key: StorageKeys.BAUD_RATE, value });
+  });
+
+  // 진단 보내기 — 약국에서 "안 된다"는 문의가 왔을 때 쓴다.
+  // 연동이 안 되는 상황은 대부분 오류가 아니라 아무 일도 안 일어나는 상태라
+  // 자동으로는 아무것도 올라가지 않는다. 눌러서 현재 상황을 보낸다.
+  document.getElementById("s-diag-row")!.addEventListener("click", () => {
+    const label = document.getElementById("s-diag")!;
+    if (sendDiagnostic()) {
+      label.textContent = "보냈습니다";
+      sdk.template.openToast({ message: "진단 정보를 보냈습니다.", icon: "success" });
+    } else {
+      // 연타했거나 수집이 꺼져 있는 경우. 어느 쪽이든 사용자가 할 일은 같다.
+      label.textContent = "잠시 후 다시";
+      sdk.template.openToast({ message: "잠시 후 다시 눌러주세요.", icon: "error" });
+    }
+    setTimeout(() => { label.textContent = "눌러서 전송"; }, 3000);
   });
 }
