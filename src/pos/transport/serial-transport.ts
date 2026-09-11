@@ -20,6 +20,7 @@ import { findPiiByteRanges } from "../../utils/pii-mask";
 import { log } from "../../utils/log";
 import { reportLinkFailure } from "../../monitoring/sentry";
 import { setLinkStatus } from "../../monitoring/link-status";
+import { isPageActive } from "../../utils/page-active";
 
 // 버퍼 상한 — TRM 시그니처를 못 찾고 과다 누적되는 상황 방어.
 const MAX_BUFFER_BYTES = 4096;
@@ -194,6 +195,15 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
     link.watchdog = setTimeout(() => {
       link.watchdog = null;
       link.alive    = false;
+
+      // 설정 화면으로 옮겨가거나 결제 앱이 위를 덮으면 이 웹뷰가 뒤로 물러나면서
+      // 수신이 멈춘다. 고장이 아니라 화면을 벗어난 것이므로 끊김으로 남기지 않는다.
+      // (남기면 2분 감시에 걸려 멀쩡한 단말이 장애로 보고된다)
+      if (!isPageActive()) {
+        setLinkStatus("결제단말기", "화면 이탈");
+        return;
+      }
+
       setLinkStatus("결제단말기", "연결 끊김");
       log.status(`[연동] 결제단말기 연결 끊김 — ${LINK_IDLE_MS / 1000}초간 신호가 없습니다`);
 
@@ -201,6 +211,8 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
       // (끊겼다 붙었다 하는 것까지 올리면 정작 봐야 할 장애가 묻힌다)
       link.outage = setTimeout(() => {
         link.outage = null;
+        // 2분 사이에 화면을 벗어났을 수도 있으니 보내기 직전에 다시 본다.
+        if (!isPageActive()) return;
         reportLinkFailure(`결제단말기 연결 끊김이 ${OUTAGE_MS / 60_000}분 지속됨 — 시리얼 선 연결을 확인해주세요`);
       }, OUTAGE_MS);
     }, LINK_IDLE_MS);

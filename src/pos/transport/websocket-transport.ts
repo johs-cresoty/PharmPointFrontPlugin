@@ -13,6 +13,7 @@ import { SocketConfig as cfg } from "../socket-config";
 import { maskPiiText } from "../../utils/pii-mask";
 import { log } from "../../utils/log";
 import { setLinkStatus } from "../../monitoring/link-status";
+import { isPageActive } from "../../utils/page-active";
 
 export type WebSocketTransportHandlers = {
   onText:   (text: string) => void;
@@ -92,11 +93,17 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
       },
 
       onDisconnection: ({ connectionId }) => {
-        if (state.connectionId === connectionId) {
-          state.connectionId = null;
-          setLinkStatus("캣포스", "연결 끊김");
-          log.status("[연동] 캣포스 연결 끊김");
+        if (state.connectionId !== connectionId) return;
+        state.connectionId = null;
+
+        // 설정 화면으로 옮겨가면 이 웹뷰가 내려가면서 캣포스도 떨어져 나간다.
+        // 고장이 아니라 화면을 벗어난 것이므로 끊김으로 남기지 않는다.
+        if (!isPageActive()) {
+          setLinkStatus("캣포스", "화면 이탈");
+          return;
         }
+        setLinkStatus("캣포스", "연결 끊김");
+        log.status("[연동] 캣포스 연결 끊김");
       },
 
       onError: (payload) => {
