@@ -37,10 +37,27 @@ function hhmmss(d: Date): string {
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
+/** 같은 줄이 연달아 쌓일 때 뒤에 붙이는 반복 표시. */
+const REPEAT_MARK = /  \(×(\d+)\)$/;
+
 function recordLinkLog(line: string): void {
   try {
     const prev = localStorage.getItem(LINK_LOG_KEY);
     const rows: string[] = prev ? JSON.parse(prev) : [];
+
+    // 같은 줄이 연달아 나오면 새로 쌓지 않고 횟수만 올린다.
+    // 장바구니 갱신처럼 연속으로 반복되는 요청이 기록을 덮는 것을 막는다.
+    const last = rows[rows.length - 1];
+    if (last) {
+      const body = last.slice(9).replace(REPEAT_MARK, ""); // 앞 9자는 "HH:MM:SS "
+      if (body === line) {
+        const n = Number(REPEAT_MARK.exec(last)?.[1] ?? 1) + 1;
+        rows[rows.length - 1] = `${hhmmss(new Date())} ${line}  (×${n})`;
+        localStorage.setItem(LINK_LOG_KEY, JSON.stringify(rows));
+        return;
+      }
+    }
+
     rows.push(`${hhmmss(new Date())} ${line}`);
     // 오래된 것부터 버린다. 오래 켜둬도 양이 늘지 않는다.
     if (rows.length > LINK_LOG_MAX) rows.splice(0, rows.length - LINK_LOG_MAX);

@@ -15,6 +15,12 @@ import { log } from "../../utils/log";
 import { setLinkStatus } from "../../monitoring/link-status";
 import { isPageActive } from "../../utils/page-active";
 
+/**
+ * 캣포스가 끊긴 뒤 이만큼 안 돌아오면 진짜 끊긴 것으로 본다.
+ * 캣포스는 전문마다 새로 접속하므로 곧바로 판정하면 거래마다 끊김이 찍힌다.
+ */
+const CATPOS_DROP_GRACE_MS = 30_000;
+
 export type WebSocketTransportHandlers = {
   onText:   (text: string) => void;
   onError?: (e: unknown) => void;
@@ -30,13 +36,22 @@ type InternalState = {
   serverId:     string;
   connectionId: string | null;
   handle:       TossWebSocketServerHandle | null;
+  /** 한 번이라도 붙은 적 있는지. 최초 연결만 기록하기 위함. */
+  everConnected: boolean;
+  /** 끊김을 기록했는지. 기록했을 때만 "다시 연결됨" 을 남긴다. */
+  dropLogged:   boolean;
+  /** 끊김 판정 대기 타이머. 유예 안에 돌아오면 취소된다. */
+  dropTimer:    ReturnType<typeof setTimeout> | null;
 };
 
 export function createWebSocketTransport({ onText, onError }: WebSocketTransportHandlers): WebSocketTransport {
   const state: InternalState = {
-    serverId:     cfg.wsServerId,
-    connectionId: null,
-    handle:       null,
+    serverId:      cfg.wsServerId,
+    connectionId:  null,
+    handle:        null,
+    everConnected: false,
+    dropLogged:    false,
+    dropTimer:     null,
   };
 
   function decodePayloadData(data: string): string {
@@ -77,10 +92,20 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
 
       onConnection: ({ connectionId }) => {
         state.connectionId = connectionId;
-        // 캣포스가 실제로 붙은 시점. 연동이 안 될 때 "서버는 떴는데 상대가 안 붙은 것"인지
-        // "서버부터 못 뜬 것"인지 이 줄 하나로 갈린다.
         setLinkStatus("캣포스", "연결됨");
-        log.status(`[연동] 캣포스 연결됨 (포트 ${cfg.port})`);
+
+        // 끊긴 것으로 기록하려던 참이면 취소한다 — 재접속했으니 끊긴 게 아니다.
+        if (state.dropTimer) { clearTimeout(state.dropTimer); state.dropTimer = null; }
+
+        // 캣포스는 전문 하나 보낼 때마다 새로 접속한다. 그때마다 남기면 기록이
+        // 접속 줄로 가득 찬다. 처음 붙은 순간과, 끊긴 뒤 돌아온 순간만 남긴다.
+        if (!state.everConnected) {
+          state.everConnected = true;
+          log.status(`[연동] 캣포스 연결됨 (포트 ${cfg.port})`);
+        } else if (state.dropLogged) {
+          state.dropLogged = false;
+          log.status("[연동] 캣포스 다시 연결됨");
+        }
       },
 
       onMessage: ({ connectionId, data }) => {
@@ -102,8 +127,18 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
           setLinkStatus("캣포스", "화면 이탈");
           return;
         }
-        setLinkStatus("캣포스", "연결 끊김");
-        log.status("[연동] 캣포스 연결 끊김");
+
+        // 캣포스는 전문을 보내고 바로 끊었다가 다음 전문 때 다시 붙는다.
+        // 끊기자마자 남기면 거래마다 '끊김'이 찍혀 진짜 끊긴 것과 구분되지 않는다.
+        // 잠시 기다려 보고 그래도 안 돌아올 때만 남긴다.
+        if (state.dropTimer) clearTimeout(state.dropTimer);
+        state.dropTimer = setTimeout(() => {
+          state.dropTimer = null;
+          if (state.connectionId || !isPageActive()) return; // 돌아왔거나 화면을 벗어남
+          state.dropLogged = true;
+          setLinkStatus("캣포스", "연결 끊김");
+          log.status(`[연동] 캣포스 연결 끊김 — ${CATPOS_DROP_GRACE_MS / 1000}초간 재접속 없음`);
+        }, CATPOS_DROP_GRACE_MS);
       },
 
       onError: (payload) => {
@@ -114,6 +149,7 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
   }
 
   async function stop(): Promise<void> {
+    if (state.dropTimer) { clearTimeout(state.dropTimer); state.dropTimer = null; }
     if (!state.handle) return;
     try {
       await state.handle.stop?.();

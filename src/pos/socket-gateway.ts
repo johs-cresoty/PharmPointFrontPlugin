@@ -128,7 +128,13 @@ function create() {
     // 어떤 요청이 실제로 도착했는지 남긴다.
     // 이 줄이 없으면 캣포스가 전문을 보내지 않은 것이고, 있으면 보낸 것이다.
     // 화면이 안 뜬다는 문의가 왔을 때 책임 소재를 이 한 줄로 가른다.
-    log.status(`[연동] 캣포스 요청 받음 — ${catCommandLabel(msg.command)}`);
+    //
+    // 다만 CONNECT 는 뺀다. 캣포스는 전문 하나 보낼 때마다 새로 접속하면서
+    // 매번 CONNECT 를 보내, 남기면 기록의 절반이 인사치레로 찬다.
+    // 연결이 살아있다는 것은 뒤따르는 실제 요청 줄이 이미 증명한다.
+    if (msg.command !== C.CATPOS_CONNECT) {
+      log.status(`[연동] 캣포스 요청 받음 — ${catCommandLabel(msg.command)}`);
+    }
 
     switch (msg.command) {
       case C.CATPOS_SESSION_START: catSessionActive = true;  break;
@@ -280,7 +286,10 @@ function create() {
     }
     // 요청은 받았는데 응답을 못 보낸 경우를 가르기 위해 커맨드만 남긴다.
     const sentCmd = CatposCodec.parse(text)?.command;
-    log.status(`[연동] 캣포스로 응답 보냄 — ${sentCmd ? catCommandLabel(sentCmd) : "형식 오류"}`);
+    // CONNECT_ACK 은 위 CONNECT 와 짝을 이루는 인사치레라 함께 뺀다.
+    if (sentCmd !== C.CATPOS_CONNECT_ACK) {
+      log.status(`[연동] 캣포스로 응답 보냄 — ${sentCmd ? catCommandLabel(sentCmd) : "형식 오류"}`);
+    }
     return ws.send(text);
   }
 
