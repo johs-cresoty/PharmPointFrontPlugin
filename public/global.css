@@ -78,12 +78,15 @@ body > #app.minimal-overlay {
 .footer-agreement { display: flex; align-items: center; gap: 10px; font-size: 16px; color: #191f28; }
 .footer-agreement input[type='checkbox'] { width: 22px; height: 22px; accent-color: #3182f6; }
 /* 토스 약관 동의 화면(renderAgreementPage)이 쓰는 것과 같은 오른쪽 화살표.
-   글자 대신 아이콘이라 표적이 분명하고, 잘못 눌러 동의가 풀릴 일이 없다. */
+   글자 대신 아이콘이라 표적이 분명하고, 잘못 눌러 동의가 풀릴 일이 없다.
+   inline-flex + center 로 아이콘을 버튼 한가운데 두고, 행에서 다시 가운데 정렬해
+   문구와 세로 중심이 맞게 한다. 크기는 옆 글자(16px)와 같게. */
 .footer-agreement-view {
-  border: 0; background: none; padding: 6px; cursor: pointer;
-  color: #8b95a1; flex: 0 0 auto; line-height: 0;
+  border: 0; background: none; padding: 0 4px; cursor: pointer;
+  color: #8b95a1; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
 }
-.footer-agreement-view svg { width: 20px; height: 20px; display: block; }
+.footer-agreement-view svg { width: 16px; height: 16px; display: block; }
 .footer-confirm { width: 100%; height: 56px; background: #3182f6; color: #fff; border: 0; border-radius: 12px; font-size: 18px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
 .footer-confirm:disabled { background: #6b7684; cursor: not-allowed; pointer-events: none; }
 

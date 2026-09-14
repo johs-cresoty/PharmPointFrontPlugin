@@ -46,6 +46,40 @@ function disarmTimeout(): void {
 
 // ─── 매장명 오버레이 (renderIdlePage 위에 얹음) ───
 
+/** 매장명 글자 크기 상한. 짧은 이름은 이 크기로 나온다. */
+const STORE_NAME_MAX_PX = 48;
+/**
+ * 글자 크기 하한.
+ *
+ * 400px 화면 기준으로 12px 면 31자까지 한 줄에 들어간다. 그보다 긴 상호는
+ * 실제로 없다시피 해서, 사실상 어떤 매장명이든 잘리지 않는다.
+ * (17자 → 24px, 21자 → 18px, 31자 → 13px)
+ * 여기서도 넘치는 극단적인 경우에만 말줄임으로 떨어진다.
+ */
+const STORE_NAME_MIN_PX = 12;
+/** 좌우 여백 — 글자가 화면 끝에 붙지 않게. */
+const STORE_NAME_SIDE_PAD = 20;
+
+/**
+ * 이름이 한 줄에 들어갈 때까지 글자 크기를 줄인다.
+ *
+ * 줄바꿈을 막지 않으면 긴 매장명이 두 줄이 되면서 아래 버튼을 덮는다.
+ * nowrap 으로 줄바꿈을 막고, 넘치는 동안 1px 씩 줄여 한 줄에 맞춘다.
+ */
+function fitStoreNameToWidth(): void {
+  if (!storeNameOverlay) return;
+  const available = storeNameOverlay.clientWidth; // padding 제외한 안쪽 폭
+  if (available <= 0) return;
+
+  let size = STORE_NAME_MAX_PX;
+  storeNameOverlay.style.fontSize = `${size}px`;
+  // nowrap + overflow:hidden 이라 scrollWidth 가 줄바꿈 없는 실제 글자 폭이다.
+  while (size > STORE_NAME_MIN_PX && storeNameOverlay.scrollWidth > available) {
+    size -= 1;
+    storeNameOverlay.style.fontSize = `${size}px`;
+  }
+}
+
 function positionStoreNameOverlay(): void {
   if (!storeNameOverlay) return;
   const app = document.getElementById("app");
@@ -54,13 +88,18 @@ function positionStoreNameOverlay(): void {
   storeNameOverlay.style.left  = `${r.left}px`;
   storeNameOverlay.style.width = `${r.width}px`;
   storeNameOverlay.style.top   = `${r.bottom - 240}px`;
+  fitStoreNameToWidth(); // 폭이 정해진 뒤에 크기를 맞춘다
 }
 
 function showStoreNameOverlay(name: string): void {
   if (!storeNameOverlay) {
     storeNameOverlay = document.createElement("div");
     storeNameOverlay.style.cssText =
-      "position:fixed;text-align:center;color:#ffffff;font-size:48px;font-weight:700;letter-spacing:-1px;pointer-events:none;z-index:10;";
+      "position:fixed;text-align:center;color:#ffffff;font-weight:700;letter-spacing:-1px;" +
+      "pointer-events:none;z-index:10;box-sizing:border-box;" +
+      // 한 줄 고정. 줄바꿈되면 아래 버튼을 덮는다.
+      `white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 ${STORE_NAME_SIDE_PAD}px;` +
+      `font-size:${STORE_NAME_MAX_PX}px;`;
     document.body.appendChild(storeNameOverlay);
     window.addEventListener("resize", positionStoreNameOverlay);
   }
