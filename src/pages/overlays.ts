@@ -50,14 +50,13 @@ export function mountPhoneOverlay(opts: {
   footer.innerHTML = `
     ${showAgreement ? `
     <div class="footer-agreement-row">
-      <div class="footer-agreement-row">
-        <label class="footer-agreement">
-          <input type="checkbox" data-role="agreement" checked />
-          <span>[필수] 개인정보 제공 동의합니다.</span>
-        </label>
-        <button class="footer-agreement-view" data-role="agreement-view" type="button">보기</button>
-      </div>
-      <button class="footer-agreement-view" data-role="agreement-view" type="button">보기</button>
+      <label class="footer-agreement">
+        <input type="checkbox" data-role="agreement" checked />
+        <span>[필수] 개인정보 제공 동의합니다.</span>
+      </label>
+      <button class="footer-agreement-view" data-role="agreement-view" type="button" aria-label="약관 전문 보기">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
     </div>
     ` : ""}
     <button class="footer-confirm" data-role="confirm" type="button">확인</button>
@@ -175,10 +174,15 @@ export function mountConfirmFooter(opts: { agreement?: boolean }): ConfirmFooter
   footer.className = "overlay-bottom";
   footer.innerHTML = `
     ${opts.agreement !== false ? `
-      <label class="footer-agreement">
-        <input type="checkbox" data-role="agreement" checked />
-        <span>[필수] 개인정보 제공 동의합니다.</span>
-      </label>
+      <div class="footer-agreement-row">
+        <label class="footer-agreement">
+          <input type="checkbox" data-role="agreement" checked />
+          <span>[필수] 개인정보 제공 동의합니다.</span>
+        </label>
+        <button class="footer-agreement-view" data-role="agreement-view" type="button" aria-label="약관 전문 보기">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
     ` : ""}
     <button class="footer-confirm" data-role="confirm" type="button">확인</button>
   `;
