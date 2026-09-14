@@ -4,6 +4,7 @@
  * SPA 특성상 뷰가 전환될 때 이전 오버레이는 제거되어야 하므로 각 뷰의 cleanup 에서
  * remove() 호출.
  */
+import { openAgreementSheet, closeAgreementSheet } from "./agreement-sheet";
 
 export type PhoneOverlayHandles = {
   root:         HTMLElement;
@@ -48,10 +49,16 @@ export function mountPhoneOverlay(opts: {
   footer.className = "overlay-bottom";
   footer.innerHTML = `
     ${showAgreement ? `
-    <label class="footer-agreement">
-      <input type="checkbox" data-role="agreement" checked />
-      <span>[필수] 개인정보 제공 동의합니다.</span>
-    </label>
+    <div class="footer-agreement-row">
+      <div class="footer-agreement-row">
+        <label class="footer-agreement">
+          <input type="checkbox" data-role="agreement" checked />
+          <span>[필수] 개인정보 제공 동의합니다.</span>
+        </label>
+        <button class="footer-agreement-view" data-role="agreement-view" type="button">보기</button>
+      </div>
+      <button class="footer-agreement-view" data-role="agreement-view" type="button">보기</button>
+    </div>
     ` : ""}
     <button class="footer-confirm" data-role="confirm" type="button">확인</button>
   `;
@@ -70,6 +77,10 @@ export function mountPhoneOverlay(opts: {
     syncBtn();
   }
 
+  // 약관 전문 보기. label 밖에 둔 버튼이라 눌러도 동의 체크가 바뀌지 않는다.
+  footer.querySelector('[data-role="agreement-view"]')
+    ?.addEventListener("click", () => { openAgreementSheet(); });
+
   return {
     root:         header,
     headerEl:     header,
@@ -79,6 +90,7 @@ export function mountPhoneOverlay(opts: {
     confirmBtnEl: confirmBtn,
     backBtnEl:    backBtn,
     remove(): void {
+      closeAgreementSheet(); // 화면을 떠날 때 약관 시트가 남지 않게
       header.remove();
       footer.remove();
       document.getElementById("app")?.classList.remove(appMode);
@@ -181,11 +193,15 @@ export function mountConfirmFooter(opts: { agreement?: boolean }): ConfirmFooter
     syncBtn();
   }
 
+  // 약관 전문 보기. label 밖에 둔 버튼이라 눌러도 동의 체크가 바뀌지 않는다.
+  footer.querySelector('[data-role="agreement-view"]')
+    ?.addEventListener("click", () => { openAgreementSheet(); });
+
   return {
     root:         footer,
     confirmBtnEl: confirmBtn,
     agreementEl:  agreement ?? ({} as HTMLInputElement),
-    remove(): void { footer.remove(); },
+    remove(): void { closeAgreementSheet(); footer.remove(); },
   };
 }
 
