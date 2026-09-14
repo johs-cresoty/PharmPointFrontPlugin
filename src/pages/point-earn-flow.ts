@@ -16,8 +16,24 @@ import { mountPayHeader, mountConfirmFooter } from "./overlays";
 import { startInactivityTimeout } from "../features/inactivity/inactivity-timeout";
 import { getInactivityTimeoutSeconds } from "../features/app-config/app-config.service";
 import { log } from "../utils/log";
+import { maskPhone } from "../utils/pii-mask";
 
 const CTX_KEY = "pharm_earn_point_ctx";
+
+/**
+ * 진단 기록에 남길 승인번호.
+ *
+ * 약국 문의는 "몇 시에 얼마 결제한 손님"으로 들어온다. 승인번호는 영수증에 찍혀 있어
+ * 그 말과 로그를 1:1 로 맞출 수 있는 유일한 값이다. 개인정보가 아니라 그대로 남긴다.
+ * 복합결제는 승인이 둘이라 함께 적는다.
+ */
+function approvalLabel(td: TransactionData): string {
+  if (td.payments) {
+    const nums = td.payments.map((p) => p.appNum).filter(Boolean);
+    if (nums.length) return nums.join("+");
+  }
+  return td.appNum || "없음";
+}
 
 type EarnContext = {
   source:          PointUseSourceType;
@@ -54,11 +70,22 @@ export async function renderPointEarnFlow(): Promise<void> {
 
   const payAmount = parseInt(String(ctx.transactionData.payAmount ?? "0"), 10) || 0;
 
+  // 적립 화면이 실제로 떴다는 기록. 승인번호가 있어 영수증과 대조된다.
+  log.status(`[적립] 요청 접수 — 결제 ${payAmount.toLocaleString()}원 · 승인 ${approvalLabel(ctx.transactionData)}`);
+
+  // 고객이 끝까지 가지 않은 경우. "화면은 떴는데 적립이 안 됐다"는 문의에서
+  // 중단인지 실패인지를 가르는 줄이다.
+  const abortEarn = (reason: string): void => {
+    log.status(`[적립] 중단 — ${reason}`);
+    void cancelEarn({ source: ctx.source, message: CancelMessage.back });
+    returnToIdle();
+  };
+
   const header = mountPayHeader({
     // 적립예상 배지가 있는 화면이라 헤더가 높아 입력란이 잘림 → 안내문구 생략(공간 확보).
     hint:         "",
     showEstimate: true,
-    onBack:       () => { void cancelEarn({ source: ctx.source, message: CancelMessage.back }); returnToIdle(); },
+    onBack:       () => abortEarn("고객이 뒤로가기"),
   });
   header.setAmount(`${payAmount.toLocaleString()}원 결제`);
 
@@ -79,8 +106,14 @@ export async function renderPointEarnFlow(): Promise<void> {
   // 조회 실패거나 0P 면 "0P 적립예상" 대신 아무것도 보이지 않게 둔다.
   void estimatePromise.then((est) => {
     const p = est.success && est.data ? parseInt(String(est.data.pointAmount ?? "0"), 10) || 0 : 0;
-    if (p > 0) header.setEstimate(`${p.toLocaleString()}P 적립예상`);
-    else       log.info(`[earn-flow] 적립예상 미표시 (success=${est.success}, point=${p})`);
+    if (p > 0) {
+      header.setEstimate(`${p.toLocaleString()}P 적립예상`);
+      log.status(`[적립] 적립예상 ${p.toLocaleString()}P`);
+    } else {
+      // "적립예상이 안 보인다"는 문의의 근거. 조회가 실패한 것인지 원래 0P 인지 갈린다.
+      log.status(`[적립] 적립예상 표시 안 함 — ${est.success ? "적립 대상 금액 아님(0P)" : `조회 실패: ${est.error || "사유 미상"}`}`);
+      log.info(`[earn-flow] 적립예상 미표시 (success=${est.success}, point=${p})`);
+    }
   });
 
   sdk.template.renderInputPage({
@@ -91,7 +124,7 @@ export async function renderPointEarnFlow(): Promise<void> {
       onChange: (v) => { currentPhone = (v ?? "").replace(/\D/g, ""); syncBtnState(); },
     },
     onSubmit: (phone) => { currentPhone = phone; syncBtnState(); },
-    onBack:   () => { void cancelEarn({ source: ctx.source, message: CancelMessage.back }); returnToIdle(); },
+    onBack:   () => abortEarn("고객이 뒤로가기"),
   });
 
   footer.confirmBtnEl.addEventListener("click", () => void submitEarn(ctx, currentPhone, estimatePromise, footer.agreementEl));
@@ -100,11 +133,8 @@ export async function renderPointEarnFlow(): Promise<void> {
 
   const inactivitySec = await getInactivityTimeoutSeconds();
   const stopTimeout = startInactivityTimeout({
-    onTimeout: () => {
-      void cancelEarn({ source: ctx.source, message: CancelMessage.back });
-      returnToIdle();
-    },
-    duration: inactivitySec,
+    onTimeout: () => abortEarn(`고객이 ${inactivitySec}초간 조작 없음`),
+    duration:  inactivitySec,
   });
 
   onCleanup(() => { stopTimeout(); header.remove(); footer.remove(); });
@@ -152,6 +182,8 @@ async function submitEarn(
   const result = await commitWithFallback(cmd);
   if (!result.success) {
     const errMsg = result.error || "적립 실패";
+    // 어느 번호가 왜 실패했는지. 약국 문의에 되묻지 않고 답하려면 사유가 있어야 한다.
+    log.status(`[적립] ❌ 실패 — ${maskPhone(phone)} · 승인 ${approvalLabel(td)} · 사유: ${errMsg}`);
     sdk.template.openToast({ message: errMsg, icon: "error" });
     void cancelEarn({ source: ctx.source, message: errMsg });
     return;
@@ -161,6 +193,12 @@ async function submitEarn(
   const earnPoint    = estimatedPoint || parseInt(result.data.pointAmount, 10) || 0;
   const customerName = result.data.customerName || "";
   const storeName    = await getStoreName();
+
+  // 이름은 남기지 않는다. 뒷 4자리만으로 약국이 말한 손님과 맞출 수 있다.
+  log.status(
+    `[적립] 완료 — ${maskPhone(phone)} · 승인 ${approvalLabel(td)} · ` +
+    `${earnPoint.toLocaleString()}P 적립 · 잔액 ${balancePoint.toLocaleString()}P`,
+  );
 
   clearContext();
   goEarnSuccess({ earnPoint, storeName, balancePoint, customerName });
