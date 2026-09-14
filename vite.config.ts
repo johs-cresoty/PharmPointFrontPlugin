@@ -1,9 +1,35 @@
 import { defineConfig } from "vite";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import pkg from "./package.json" with { type: "json" };
 
 // PharmPoint Toss 플러그인 SPA 개발/빌드 설정 (순수 TypeScript, React 미사용).
 // Toss SDK 가 자체 React 를 포함하므로 클라이언트는 SDK 위 얇은 로직만 담당.
+/**
+ * 정적 파일(global.css · sdk.js)에 빌드마다 다른 값을 붙인다.
+ *
+ * 이 파일들은 이름이 항상 같아서, 단말기가 한 번 받아두면 내용을 고쳐도 새로 받지
+ * 않는다. 실제로 CSS 를 고쳐 배포했는데 화면이 그대로인 일이 생긴다.
+ * dist 의 HTML 두 개(index · settings)에 ?v= 를 붙여 매 배포마다 새로 받게 한다.
+ */
+function stampStaticAssets(): import("vite").Plugin {
+  const stamp = Date.now().toString(36);
+  return {
+    name: "pharmpoint-stamp-static-assets",
+    closeBundle() {
+      const files = ["dist/index.html", "dist/settings.html"];
+      for (const file of files) {
+        if (!existsSync(file)) continue;
+        const next = readFileSync(file, "utf8")
+          .replace(/href="\/global\.css"/g, `href="/global.css?v=${stamp}"`)
+          .replace(/src="\/sdk\.js"/g,      `src="/sdk.js?v=${stamp}"`);
+        writeFileSync(file, next);
+      }
+    },
+  };
+}
+
 export default defineConfig(({ command, mode }) => ({
+  plugins: [stampStaticAssets()],
   define: {
     // Sentry release 태그(PLUGIN_ID@VERSION)와 기동 로그에 쓴다.
     // 단말에 올라간 번들이 방금 올린 것인지 콘솔로 바로 구분하기 위함.
