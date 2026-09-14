@@ -88,6 +88,13 @@ const LINK_IDLE_MS = 15_000;
 const LINK_ALIVE_LOG_MS = 60_000;
 /** 신호가 이만큼 계속 끊겨 있으면 장애로 보고 Sentry 에 올린다. */
 const OUTAGE_MS = 120_000;
+/**
+ * 장애를 올린 뒤 다시 올릴 수 있게 풀어주는 조건 — 신호가 이만큼 계속 들어와야 한다.
+ *
+ * 접촉이 나쁜 선은 잠깐 붙었다 끊기기를 반복한다. 신호 한 번 들어왔다고 바로 풀면
+ * 끊길 때마다 같은 장애가 새로 올라가 한도만 쓴다. 확실히 회복된 뒤에만 푼다.
+ */
+const OUTAGE_RESET_MS = 60_000;
 
 /**
  * 같은 줄이 반복되면 접어서 횟수로만 알리는 로거.
@@ -166,6 +173,10 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
     lastAliveLog: 0,
     watchdog:     null as ReturnType<typeof setTimeout> | null,
     outage:       null as ReturnType<typeof setTimeout> | null,
+    // 신호가 돌아온 시각. 회복이 충분히 이어졌는지 재는 기준.
+    aliveSince:   0,
+    // 이번 장애를 이미 Sentry 에 올렸는지. 같은 장애로 거듭 올리지 않기 위한 잠금.
+    outageReported: false,
   };
 
   const logRx  = createFoldedLogger();
@@ -178,6 +189,7 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
 
     if (!link.alive) {
       link.alive        = true;
+      link.aliveSince   = now;
       link.lastAliveLog = now;
       link.rxSinceLog   = 1;
       setLinkStatus("결제단말기", "연결됨");
@@ -187,6 +199,12 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
       log.debug(`[연동] 결제단말기 신호 정상 — 최근 ${sec}초간 ${link.rxSinceLog}건 수신`);
       link.lastAliveLog = now;
       link.rxSinceLog   = 0;
+    }
+
+    // 신호가 이만큼 끊기지 않고 이어졌으면 확실히 회복된 것이다. 다음에 진짜로
+    // 끊기면 다시 올릴 수 있게 잠금을 푼다. (잠깐 들어온 신호로는 풀리지 않는다)
+    if (link.outageReported && link.alive && now - link.aliveSince >= OUTAGE_RESET_MS) {
+      link.outageReported = false;
     }
 
     if (link.watchdog) clearTimeout(link.watchdog);
@@ -213,6 +231,13 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
         link.outage = null;
         // 2분 사이에 화면을 벗어났을 수도 있으니 보내기 직전에 다시 본다.
         if (!isPageActive()) return;
+        // 한 장애당 한 번만 올린다. 접촉 불량으로 붙었다 끊기기를 반복해도
+        // 확실히 회복되기 전까지는 같은 내용이 거듭 올라가지 않는다.
+        if (link.outageReported) {
+          log.debug("[연동] 결제단말기 장애 지속 — 이미 보고한 건이라 다시 올리지 않음");
+          return;
+        }
+        link.outageReported = true;
         reportLinkFailure(`결제단말기 연결 끊김이 ${OUTAGE_MS / 60_000}분 지속됨 — 시리얼 선 연결을 확인해주세요`);
       }, OUTAGE_MS);
     }, LINK_IDLE_MS);
