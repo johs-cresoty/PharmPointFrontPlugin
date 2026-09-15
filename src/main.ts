@@ -7,8 +7,8 @@
  *   2) 라우터에 뷰 등록 후 시작
  *   3) 소켓 이벤트 → 화면 라우팅 콜백 연결
  */
-import { ensureInit, API_ENV_LABEL, currentBusinessNumber } from "./api/config";
-import { initMonitoring, setMerchantTag } from "./monitoring/sentry";
+import { ensureInit, API_ENV_LABEL, currentBusinessNumber, currentSerialNumber } from "./api/config";
+import { initMonitoring, setTerminalTags } from "./monitoring/sentry";
 import { start as startAppSession, setConfig as setAppConfig, stop as stopAppSession } from "./features/app-session/app-session.service";
 import { getPointUseConfig } from "./features/app-config/app-config.service";
 import { getCurrentPath, navigate, register, start as startRouter } from "./router";
@@ -88,8 +88,10 @@ async function bootstrap(): Promise<void> {
 
   await ensureInit();
 
-  // 어느 약국인지 Sentry 에 표시. "○○약국에서 연동이 안 된다" 문의가 오면 이걸로 찾는다.
-  setMerchantTag(currentBusinessNumber());
+  // 어느 약국의 어느 단말인지 Sentry 에 표시.
+  // "○○약국에서 연동이 안 된다" 문의가 오면 이 태그로 찾는다.
+  // ensureInit 뒤라 두 값 모두 실단말에서 읽힌 상태다.
+  setTerminalTags(currentBusinessNumber(), currentSerialNumber());
 
   // 포인트 설정 조회는 기다리지 않는다.
   //

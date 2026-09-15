@@ -46,15 +46,28 @@ function scrub<T>(event: T): T {
 }
 
 /**
- * 이 단말이 어느 약국인지 표시.
+ * 이 단말이 어느 약국의 어느 기기인지 표시.
  *
  * "○○약국에서 연동이 안 된다"는 문의가 왔을 때 Sentry 에서 바로 찾기 위함이다.
+ * 태그는 Sentry 가 색인해 두므로 `merchant:...` / `device:...` 로 바로 검색된다.
+ *
  * 사업자번호는 사업자 정보이지 개인정보가 아니다.
+ * 시리얼 번호는 토스 운영 가이드가 수집 권장 항목으로 명시한 값이다
+ * (develop-troubleshooting 3-2 — release 와 sdk.app.getSerialNumber()).
+ * 한 약국에 단말이 여러 대일 때 어느 기기인지 가르는 유일한 값이기도 하다.
  */
-export function setMerchantTag(businessNumber: string): void {
-  if (!SENTRY_DSN || !businessNumber) return;
-  Sentry.setTag("merchant", businessNumber);
+export function setTerminalTags(businessNumber: string, serialNumber: string): void {
+  if (!SENTRY_DSN) return;
+  if (businessNumber) Sentry.setTag("merchant", businessNumber);
+  if (serialNumber)   Sentry.setTag("device",   serialNumber);
+  _merchant = businessNumber;
+  _device   = serialNumber;
 }
+
+// 진단 본문에도 함께 싣기 위해 들고 있는다. 태그는 Sentry 화면 위쪽에 따로 뜨는데,
+// 진단 기록을 통째로 복사해 공유할 때 어느 단말인지 같이 붙어 오게 하려는 것.
+let _merchant = "";
+let _device   = "";
 
 /**
  * 연동이 끊긴 상태를 오류로 올린다.
@@ -105,6 +118,8 @@ export function sendDiagnostic(): boolean {
       // 로그는 '일어난 일'만 남는다. 거래가 없던 동안에는 아무 줄도 없어서
       // 로그만으로는 지금 붙어 있는지 알 수 없다. 현재 값을 따로 싣는다.
       "현재 상태": [
+        `약국(사업자번호) : ${_merchant || "(확인 안 됨)"}`,
+        `단말기(시리얼)   : ${_device   || "(확인 안 됨)"}`,
         `캣포스     : ${status.캣포스}`,
         `결제단말기 : ${status.결제단말기}`,
         `마지막 변화 : ${status.갱신시각}`,
