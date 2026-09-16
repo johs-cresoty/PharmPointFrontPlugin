@@ -224,7 +224,7 @@ async function handleLookupResult(
       `[사용] 중단 — ${maskPhone(phone)} · 보유 ${balance.toLocaleString()}P · ` +
       (cfg.isMinPointEnabled && cfg.minPoint > balance
         ? `최소 ${cfg.minPoint.toLocaleString()}P 이상부터 사용 가능`
-        : "사용할 포인트 없음") + " · 정상 동작(고장 아님)",
+        : "사용할 포인트 없음"),
     );
     void cancelUse({ source: ctx.source, message: CancelMessage.insufficient });
     clearContext();

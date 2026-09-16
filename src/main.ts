@@ -190,7 +190,7 @@ async function bootstrap(): Promise<void> {
       if (path !== "/" || !isIdleActive()) {
         // "스캔했는데 가격표시가 안 떠요" 문의의 답이 대부분 여기다.
         // 고장이 아니라 고객이 조작 중이라 일부러 안 바꾼 것임을 명시한다.
-        log.status(`[장바구니] 갱신 → 가격표시 무시 — 고객이 조작 중인 화면(${screenName(path)})이라 그대로 둠 · 의도된 동작`);
+        log.status(`[장바구니] 갱신 → 가격표시 무시 — 고객이 조작 중인 화면(${screenName(path)})이라 그대로 둠`);
         return;
       }
       saveCart(cart);             // renderPriceDisplay 가 읽을 스냅샷
@@ -208,7 +208,7 @@ async function bootstrap(): Promise<void> {
     onTerminalHideScreen: () => {
       const path = getCurrentPath();
       if (!isTerminalOriginScreen(path)) {
-        log.status(`[팜포인트] 화면 닫기 요청 → 변화 없음 — 단말기가 띄운 화면이 아님(현재 ${screenName(path)}) · 의도된 동작`);
+        log.status(`[팜포인트] 화면 닫기 요청 → 변화 없음 — 단말기가 띄운 화면이 아님(현재 ${screenName(path)})`);
         return;
       }
       closeTerminalScreen(path!);
@@ -228,7 +228,7 @@ async function bootstrap(): Promise<void> {
       } else {
         // "POS 에서 비웠는데 단말기에 그대로예요" 문의의 답이 여기다.
         // 전문은 받았고, 가격표시 중이 아니라 바꿀 화면이 없었다는 뜻이다.
-        log.status(`[장바구니] 비움 → 화면 변화 없음 — 가격표시 중이 아님(현재 ${screenName(path)}) · 의도된 동작`);
+        log.status(`[장바구니] 비움 → 화면 변화 없음 — 가격표시 중이 아님(현재 ${screenName(path)})`);
       }
     },
   });
