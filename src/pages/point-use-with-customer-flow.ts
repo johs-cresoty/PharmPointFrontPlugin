@@ -41,7 +41,11 @@ function setTossInputValue(value: number): void {
 
 export async function renderPointUseWithCustomerFlow(): Promise<void> {
   const ctx = loadContext();
-  if (!ctx) { returnToIdle(); return; }
+  if (!ctx) {
+    log.status("[팜포인트] ❌ 포인트 사용(회원 지정) 화면 못 띄움 — 요청 정보가 비어 있음 · 소관: 플러그인(프론트)");
+    returnToIdle();
+    return;
+  }
 
   const balance   = ctx.balance   || 0;
   const payAmount = ctx.payAmount || 0;
@@ -76,7 +80,7 @@ export async function renderPointUseWithCustomerFlow(): Promise<void> {
       `[사용] 중단 — 보유 ${balance.toLocaleString()}P · ` +
       (ctx.isMinPointEnabled && ctx.minPoint > balance
         ? `최소 ${ctx.minPoint.toLocaleString()}P 이상부터 사용 가능`
-        : "사용할 포인트 없음"),
+        : "사용할 포인트 없음") + " · 정상 동작(고장 아님)",
     );
     void cancelUse({ source: ctx.source, message: CancelMessage.insufficient });
     clearContext();

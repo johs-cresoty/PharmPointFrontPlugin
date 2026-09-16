@@ -54,6 +54,27 @@ function isTerminalOriginScreen(path: string | null): boolean {
   }
 }
 
+/**
+ * 진단 기록에 적을 화면 이름.
+ *
+ * 경로(/point-use-flow)를 그대로 적으면 약국 문의를 받는 사람이 무슨 화면인지 모른다.
+ * "어느 화면이라 이렇게 됐다" 가 곧 책임 소재 설명이므로 사람 말로 적는다.
+ */
+function screenName(path: string | null): string {
+  switch (path) {
+    case "/":                             return isIdleActive() ? "대기화면" : "번호 입력";
+    case "/member-search":                return "포인트 조회";
+    case "/point-earn-flow":              return "적립";
+    case "/point-use-flow":               return "포인트 사용";
+    case "/point-use-with-customer-flow": return "포인트 사용(회원 지정)";
+    case "/result":                       return "결과 안내";
+    case "/settings":                     return "환경설정";
+    case "/price-display":                return "가격표시";
+    case "/barcode-display":              return "바코드 표시";
+    default:                              return path ?? "알 수 없음";
+  }
+}
+
 /** 화면별 보관 컨텍스트 폐기 후 대기화면 복귀. */
 function closeTerminalScreen(path: string): void {
   switch (path) {
@@ -83,7 +104,7 @@ async function bootstrap(): Promise<void> {
   // 설정 화면(settings.html)도 플러그인을 부팅한다. 거기서도 이 줄을 남기면
   // 진단 기록에 '시작' 이 두 번 찍혀 재시작한 것처럼 읽힌다. 본 화면에서만 남긴다.
   if (!isSettingsEntry()) {
-    log.status(`[연동] 팜포인트 시작 — 버전 ${__APP_VERSION__} · ${API_ENV_LABEL} 서버 사용`);
+    log.status(`[팜포인트] 시작 — 버전 ${__APP_VERSION__} · ${API_ENV_LABEL} 서버 사용`);
   }
 
   await ensureInit();
@@ -134,20 +155,29 @@ async function bootstrap(): Promise<void> {
       // Home 뷰가 이 sessionStorage 를 읽어 phone/customer 입력 서브뷰로 전환.
       sessionStorage.setItem("pharm_cat_request_mode", args.mode);
       navigate("/");
+      log.status(`[팜포인트] 번호 입력 화면 띄움 — ${args.mode}`);
     },
     onCatDisconnect: () => { navigate("/"); },
 
     // 고객 가격표시기 — catpos-cart-display-spec.md 참고.
     onCartUpdate: (cart) => {
+      const amount = `${(cart.total || 0).toLocaleString()}원 ${cart.items.length}건`;
+
       // 빈 카트(모든 상품 삭제 등)는 대기화면으로 복귀 처리. 가격표시기 유지 안 함.
       if (cart.items.length === 0) {
         clearCart();
-        if (getCurrentPath() === "/price-display") navigate("/");
+        if (getCurrentPath() === "/price-display") {
+          navigate("/");
+          log.status("[장바구니] 갱신 → 가격표시 닫음 — 담긴 상품 없음");
+        } else {
+          log.status("[장바구니] 갱신 → 화면 변화 없음 — 담긴 상품 없고 가격표시 중도 아님");
+        }
         return;
       }
       if (getCurrentPath() === "/price-display") {
         saveCart(cart);           // 라우터 재진입 시 초기 렌더용 스냅샷 보관
         updatePriceDisplay(cart); // 이미 진입 상태 → 실시간 갱신
+        log.status(`[장바구니] 갱신 → 가격표시 다시 그림 — ${amount}`);
         return;
       }
       // 고객이 조작 중인 화면(번호 입력·포인트 입력·약관 동의·결과·환경설정 등)에서는
@@ -158,31 +188,31 @@ async function bootstrap(): Promise<void> {
       // 판별할 수 없다 → isIdleActive() 로 대기 상태인지 확인한다.
       const path = getCurrentPath();
       if (path !== "/" || !isIdleActive()) {
-        log.info(`[main] 고객 조작 화면 진행 중 — 카트 갱신 무시 (path=${path})`);
+        // "스캔했는데 가격표시가 안 떠요" 문의의 답이 대부분 여기다.
+        // 고장이 아니라 고객이 조작 중이라 일부러 안 바꾼 것임을 명시한다.
+        log.status(`[장바구니] 갱신 → 가격표시 무시 — 고객이 조작 중인 화면(${screenName(path)})이라 그대로 둠 · 의도된 동작`);
         return;
       }
       saveCart(cart);             // renderPriceDisplay 가 읽을 스냅샷
       navigate("/price-display"); // 대기 상태에서 첫 수신 → 가격표시기 진입
+      log.status(`[장바구니] 갱신 → 가격표시 띄움 — ${amount}`);
     },
     // 단말기 005 — 바코드 표시. (006 회신은 AppSession 이 수신 즉시 처리)
     onBarcodeDisplay: (barcode) => {
-      log.info(
-        `[main] 바코드 표시 요청 — ${barcode.kind} timeout=${barcode.timeoutSec}초 ` +
-        `데이터=${barcode.dataLength}바이트`,
-      );
       saveBarcode(barcode);
       navigate("/barcode-display");
+      log.status(`[팜포인트] 바코드 화면 띄움 — ${barcode.kind} · ${barcode.timeoutSec}초`);
     },
 
     // 단말기 999 — 팜포인트 화면 미노출. 회신은 게이트웨이 자동 ACK 뿐(010 미발신).
     onTerminalHideScreen: () => {
       const path = getCurrentPath();
       if (!isTerminalOriginScreen(path)) {
-        log.info(`[main] 999 화면 미노출 — 단말기 유래 화면 아님(path=${path}). 무시`);
+        log.status(`[팜포인트] 화면 닫기 요청 → 변화 없음 — 단말기가 띄운 화면이 아님(현재 ${screenName(path)}) · 의도된 동작`);
         return;
       }
-      log.info(`[main] 999 화면 미노출 — ${path} 닫고 대기화면 복귀`);
       closeTerminalScreen(path!);
+      log.status(`[팜포인트] 화면 닫기 요청 → ${screenName(path)} 닫고 대기화면 복귀`);
     },
 
     onCartClear: () => {
@@ -190,8 +220,16 @@ async function bootstrap(): Promise<void> {
       // 결제 완료 후 적립/사용 화면이 뜬 상태에서 POS 가 CART_CLEAR 를 이어 보내는 경우
       // (SESSION_END → CART_CLEAR 시퀀스) 무조건 navigate("/") 를 하면 방금 띄운
       // 적립·사용 화면이 바로 닫혀버린다 → 현재 경로 체크로 방어.
+      const path = getCurrentPath();
       clearCart();
-      if (getCurrentPath() === "/price-display") navigate("/");
+      if (path === "/price-display") {
+        navigate("/");
+        log.status("[장바구니] 비움 → 가격표시 닫고 대기화면 복귀");
+      } else {
+        // "POS 에서 비웠는데 단말기에 그대로예요" 문의의 답이 여기다.
+        // 전문은 받았고, 가격표시 중이 아니라 바꿀 화면이 없었다는 뜻이다.
+        log.status(`[장바구니] 비움 → 화면 변화 없음 — 가격표시 중이 아님(현재 ${screenName(path)}) · 의도된 동작`);
+      }
     },
   });
 

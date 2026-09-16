@@ -66,7 +66,11 @@ async function getStoreName(): Promise<string> {
 
 export async function renderPointEarnFlow(): Promise<void> {
   const ctx = loadContext();
-  if (!ctx) { returnToIdle(); return; }
+  if (!ctx) {
+    log.status("[팜포인트] ❌ 적립 화면 못 띄움 — 요청 정보가 비어 있음 · 소관: 플러그인(프론트)");
+    returnToIdle();
+    return;
+  }
 
   const payAmount = parseInt(String(ctx.transactionData.payAmount ?? "0"), 10) || 0;
 
@@ -183,7 +187,7 @@ async function submitEarn(
   if (!result.success) {
     const errMsg = result.error || "적립 실패";
     // 어느 번호가 왜 실패했는지. 약국 문의에 되묻지 않고 답하려면 사유가 있어야 한다.
-    log.status(`[적립] ❌ 실패 — ${maskPhone(phone)} · 승인 ${approvalLabel(td)} · 사유: ${errMsg}`);
+    log.status(`[적립] ❌ 실패 — ${maskPhone(phone)} · 승인 ${approvalLabel(td)} · ${errMsg} · 소관: 서버(API)`);
     sdk.template.openToast({ message: errMsg, icon: "error" });
     void cancelEarn({ source: ctx.source, message: errMsg });
     return;

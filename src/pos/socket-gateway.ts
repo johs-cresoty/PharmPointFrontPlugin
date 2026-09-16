@@ -107,6 +107,16 @@ function mapTerminalCommandToEvent(cmd: string): SocketEventType | null {
   }
 }
 
+/**
+ * 도착 사실만으로는 기록에 남길 값이 없는 커맨드.
+ * 자세한 사정은 아래 onCatText 의 주석 참고.
+ */
+const SILENT_CAT_COMMANDS = new Set<string>([
+  C.CATPOS_CONNECT,
+  C.CATPOS_CART_UPDATE,
+  C.CATPOS_CART_CLEAR,
+]);
+
 // ── Gateway 팩토리 ───────────────────────────────
 
 function create() {
@@ -129,11 +139,15 @@ function create() {
     // 이 줄이 없으면 캣포스가 전문을 보내지 않은 것이고, 있으면 보낸 것이다.
     // 화면이 안 뜬다는 문의가 왔을 때 책임 소재를 이 한 줄로 가른다.
     //
-    // 다만 CONNECT 는 뺀다. 캣포스는 전문 하나 보낼 때마다 새로 접속하면서
-    // 매번 CONNECT 를 보내, 남기면 기록의 절반이 인사치레로 찬다.
-    // 연결이 살아있다는 것은 뒤따르는 실제 요청 줄이 이미 증명한다.
-    if (msg.command !== C.CATPOS_CONNECT) {
-      log.status(`[연동] 캣포스 요청 받음 — ${catCommandLabel(msg.command)}`);
+    // 두 가지는 뺀다.
+    //   CONNECT — 캣포스는 전문 하나 보낼 때마다 새로 접속하면서 매번 보낸다.
+    //             남기면 기록의 절반이 인사치레로 찬다. 연결이 살아있다는 것은
+    //             뒤따르는 실제 요청 줄이 이미 증명한다.
+    //   장바구니 — 도착 사실만으로는 "그래서 화면이 어떻게 됐나" 에 답하지 못한다.
+    //             main.ts 가 처리 결과까지 담은 [장바구니] 한 줄로 대신 남긴다.
+    //             두 줄로 나누면 서로 다른 줄이 번갈아 찍혀 반복 접기가 풀린다.
+    if (!SILENT_CAT_COMMANDS.has(msg.command)) {
+      log.status(`[캣포스] ${catCommandLabel(msg.command)} 보냄`);
     }
 
     switch (msg.command) {
@@ -153,7 +167,7 @@ function create() {
     // 전문 형식(마커·플래그)까지 맞았다는 뜻이라, 연동 성립 시점으로 한 번만 남긴다.
     if (!trmLinkConfirmed) {
       trmLinkConfirmed = true;
-      log.status("[연동] 결제단말기와 팜포인트 통신 확인됨");
+      log.status("[단말기] 팜포인트 전문 도착 — 통신 확인됨");
     }
 
     if (catSessionActive) {
@@ -186,7 +200,7 @@ function create() {
       return;
     }
 
-    log.status(`[연동] 결제단말기 요청 받음 — ${terminalCommandLabel(parsed.cmd)}`);
+    log.status(`[단말기] ${terminalCommandLabel(parsed.cmd)} 보냄`);
     // 필드는 커맨드마다 구성이 달라 키 기반으로 가릴 수 없다. 값 패턴으로 번호만 가린다.
     log.info(`[SocketGateway] 결제단말기 필드 — ${maskPiiText(JSON.stringify(parsed.fields))}`);
 
@@ -250,9 +264,9 @@ function create() {
     setLinkStatus("캣포스",    wsOk  ? "연결 대기 중" : "준비 실패");
     setLinkStatus("결제단말기", serOk ? "연결 대기 중" : "준비 실패");
     log.status(
-      `[연동] ${wsOk && serOk ? "준비 완료" : "준비 실패"} — ` +
-      `캣포스 ${wsOk ? "연결 대기 중" : "실패"} · 결제단말기 ${serOk ? "연결 대기 중" : "실패"} ` +
-      `(포트 ${SocketConfig.port})`,
+      `[팜포인트] ${wsOk && serOk ? "받을 준비 완료" : "❌ 받을 준비 실패"} — ` +
+      `캣포스 ${wsOk ? `대기(포트 ${SocketConfig.port})` : "포트 열기 실패"} · ` +
+      `단말기 ${serOk ? "대기" : "시리얼 열기 실패"}`,
     );
     if (!wsOk || !serOk) {
       reportLinkFailure(
@@ -304,7 +318,9 @@ function create() {
 
     const onSendFailure = (reason: unknown): void => {
       const label = cmd ? catCommandLabel(cmd) : "형식 오류";
-      log.status(`[연동] ❌ 캣포스에 못 보냄 — ${label}`);
+      // 팜포인트는 회신을 만들어 보내려 했고, 받을 쪽이 없어서 실패했다.
+      // 소관을 적어두지 않으면 "팜포인트가 응답을 안 줬다" 로 읽힌다.
+      log.status(`[팜포인트] ❌ ${label} 회신 못 보냄 — 캣포스 연결이 없습니다 · 소관: 캣포스`);
       // 캣포스가 기다리는 회신이 날아가면 계산대가 멈춘다. 이건 올려야 한다.
       if (isAwaitedReply(cmd)) {
         reportLinkFailure(
@@ -321,7 +337,7 @@ function create() {
     // 요청은 받았는데 응답을 못 보낸 경우를 가르기 위해 커맨드만 남긴다.
     // CONNECT_ACK 은 CONNECT 와 짝을 이루는 인사치레라 뺀다.
     if (cmd !== C.CATPOS_CONNECT_ACK) {
-      log.status(`[연동] 캣포스로 응답 보냄 — ${cmd ? catCommandLabel(cmd) : "형식 오류"}`);
+      log.status(`[팜포인트] ${cmd ? catCommandLabel(cmd) : "형식 오류"} 회신함 → 캣포스`);
     }
     return ws.send(text).catch(onSendFailure);
   }

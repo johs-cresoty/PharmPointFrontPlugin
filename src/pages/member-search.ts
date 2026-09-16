@@ -2,7 +2,7 @@
  * MemberSearch 뷰 — 사용자가 대기화면에서 "포인트 조회" 를 눌러 진입.
  * 휴대폰 번호 입력 → getCustomer → getPointBalance → ResultNavigator 로 이동.
  */
-import { getCustomer, getPointBalance } from "../features/point-inquiry/point-inquiry.service";
+import { getCustomer, getPointBalance, inquiryFailureNote } from "../features/point-inquiry/point-inquiry.service";
 import { goLookupSuccess, goLookupFail } from "../features/result-page/result-navigator";
 import { navigate, onCleanup } from "../router";
 import { mountPhoneOverlay } from "./overlays";
@@ -19,7 +19,7 @@ async function submitInquiry(phone: string): Promise<void> {
     if (!exist.success || !exist.customer) {
       // 화면 문구는 미가입이든 서버 오류든 똑같이 "등록된 회원이 없습니다" 라서
       // 로그로 갈라두지 않으면 문의를 받아도 원인을 알 수 없다.
-      log.status(`[조회] 실패 — ${maskPhone(phone)} · ${exist.success ? "등록된 회원 없음" : `조회 오류: ${exist.error || "사유 미상"}`}`);
+      log.status(`[조회] 실패 — ${maskPhone(phone)} · ${inquiryFailureNote(exist)}`);
       sdk.template.openToast({ message: "등록된 회원이 없습니다.", icon: "error" });
       return;
     }
@@ -28,11 +28,11 @@ async function submitInquiry(phone: string): Promise<void> {
       log.status(`[조회] 완료 — ${maskPhone(phone)} · 보유 ${(result.customer.pointBalance || 0).toLocaleString()}P`);
       goLookupSuccess({ phone, customer: result.customer });
     } else {
-      log.status(`[조회] 실패 — ${maskPhone(phone)} · ${result.success ? "회원 정보 없음" : `조회 오류: ${result.error || "사유 미상"}`}`);
+      log.status(`[조회] 실패 — ${maskPhone(phone)} · ${inquiryFailureNote(result)}`);
       goLookupFail({ phone, error: result.success === false ? result.error : undefined });
     }
   } catch (err) {
-    log.status(`[조회] 실패 — ${maskPhone(phone)} · 통신 오류: ${(err as Error).message}`);
+    log.status(`[조회] 실패 — ${maskPhone(phone)} · 서버에 닿지 못함: ${(err as Error).message} · 소관: 네트워크(통신)`);
     console.error("[MemberSearch] 조회 실패:", err);
     goLookupFail({ phone, error: `조회 중 오류가 발생했습니다. (${(err as Error).message})` });
   }

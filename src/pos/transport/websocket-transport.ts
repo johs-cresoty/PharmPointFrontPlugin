@@ -18,8 +18,14 @@ import { isPageActive } from "../../utils/page-active";
 /**
  * 캣포스가 끊긴 뒤 이만큼 안 돌아오면 진짜 끊긴 것으로 본다.
  * 캣포스는 전문마다 새로 접속하므로 곧바로 판정하면 거래마다 끊김이 찍힌다.
+ *
+ * 30초로 뒀더니 손님 사이가 조금만 뜸해져도 끊김이 찍혔다. 실제 기록에서
+ * 28분 동안 13줄이 이것으로 찼고, 대부분 30~50초짜리 평범한 공백이었다.
+ * 정상인데 장애처럼 보이고 기록만 먹는다. 3분이면 그런 공백은 걸리지 않고,
+ * 진짜로 POS 가 죽은 경우만 남는다. 이 줄은 알림이 아니라 기록이라
+ * 판정이 늦어져도 잃는 것이 없다.
  */
-const CATPOS_DROP_GRACE_MS = 30_000;
+const CATPOS_DROP_GRACE_MS = 180_000;
 
 export type WebSocketTransportHandlers = {
   onText:   (text: string) => void;
@@ -101,10 +107,10 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
         // 접속 줄로 가득 찬다. 처음 붙은 순간과, 끊긴 뒤 돌아온 순간만 남긴다.
         if (!state.everConnected) {
           state.everConnected = true;
-          log.status(`[연동] 캣포스 연결됨 (포트 ${cfg.port})`);
+          log.status(`[캣포스] 접속함 (포트 ${cfg.port})`);
         } else if (state.dropLogged) {
           state.dropLogged = false;
-          log.status("[연동] 캣포스 다시 연결됨");
+          log.status("[캣포스] 다시 접속함");
         }
       },
 
@@ -137,7 +143,7 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
           if (state.connectionId || !isPageActive()) return; // 돌아왔거나 화면을 벗어남
           state.dropLogged = true;
           setLinkStatus("캣포스", "연결 끊김");
-          log.status(`[연동] 캣포스 연결 끊김 — ${CATPOS_DROP_GRACE_MS / 1000}초간 재접속 없음`);
+          log.status(`[캣포스] 끊김 — ${CATPOS_DROP_GRACE_MS / 60_000}분간 재접속 없음`);
         }, CATPOS_DROP_GRACE_MS);
       },
 

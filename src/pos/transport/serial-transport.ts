@@ -193,7 +193,7 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
       link.lastAliveLog = now;
       link.rxSinceLog   = 1;
       setLinkStatus("결제단말기", "연결됨");
-      log.status("[연동] 결제단말기 연결됨");
+      log.status("[단말기] 신호 들어옴 — 연결 확인");
     } else if (now - link.lastAliveLog >= LINK_ALIVE_LOG_MS) {
       const sec = Math.round((now - link.lastAliveLog) / 1000);
       log.debug(`[연동] 결제단말기 신호 정상 — 최근 ${sec}초간 ${link.rxSinceLog}건 수신`);
@@ -223,7 +223,7 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
       }
 
       setLinkStatus("결제단말기", "연결 끊김");
-      log.status(`[연동] 결제단말기 연결 끊김 — ${LINK_IDLE_MS / 1000}초간 신호가 없습니다`);
+      log.status(`[단말기] 끊김 — ${LINK_IDLE_MS / 1000}초간 신호 없음`);
 
       // 잠깐 끊기는 것은 흔하다. 계속 끊겨 있을 때만 Sentry 로 올린다.
       // (끊겼다 붙었다 하는 것까지 올리면 정작 봐야 할 장애가 묻힌다)

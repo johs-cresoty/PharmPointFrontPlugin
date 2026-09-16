@@ -6,7 +6,7 @@
  *   2) 잔액 검증 (미달·최소 미만 → 결과 화면으로)
  *   3) 사용 포인트 입력 → 사용 결과 송신 → Result 이동
  */
-import { getCustomer, getPointBalance, type InquiryResult } from "../features/point-inquiry/point-inquiry.service";
+import { getCustomer, getPointBalance, inquiryFailureNote, type InquiryResult } from "../features/point-inquiry/point-inquiry.service";
 import { getInactivityTimeoutSeconds, getPointUseConfig } from "../features/app-config/app-config.service";
 import { cancelUse, CancelMessage, relayUseResult, remainingPoint, PointUseSource, type PointUseSourceType } from "../features/point-use/point-use.service";
 import { goUseSuccess, goInsufficient, goPayAmountBelowMinPoint } from "../features/result-page/result-navigator";
@@ -57,7 +57,11 @@ function setTossInputValue(value: string | number): void {
 
 export async function renderPointUseFlow(): Promise<void> {
   const ctx = loadContext();
-  if (!ctx) { returnToIdle(); return; }
+  if (!ctx) {
+    log.status("[팜포인트] ❌ 포인트 사용 화면 못 띄움 — 요청 정보가 비어 있음 · 소관: 플러그인(프론트)");
+    returnToIdle();
+    return;
+  }
 
   // 사용 요청은 결제 전이라 승인번호가 없다. 대조 키는 시각과 결제금액뿐이다.
   log.status(`[사용] 요청 접수 — 결제 ${(ctx.payAmount || 0).toLocaleString()}원`);
@@ -145,13 +149,13 @@ function renderPhoneStep(
     if (!exist.success || !exist.customer) {
       // 미가입인지 서버가 못 받은 것인지 갈라 남긴다. 화면 문구는 둘 다 같아서
       // 로그가 없으면 약국 문의만으로는 구분할 수 없다.
-      log.status(`[사용] 회원 조회 실패 — ${maskPhone(phone)} · ${exist.success ? "등록된 회원 없음" : `조회 오류: ${exist.error || "사유 미상"}`}`);
+      log.status(`[사용] 회원 조회 실패 — ${maskPhone(phone)} · ${inquiryFailureNote(exist)}`);
       sdk.template.openToast({ message: "등록된 회원이 없습니다.", icon: "error" });
       return;
     }
     const res = await getPointBalance(phone);
     if (!res.success || !res.customer) {
-      log.status(`[사용] 포인트 조회 실패 — ${maskPhone(phone)} · ${res.success ? "회원 정보 없음" : `조회 오류: ${res.error || "사유 미상"}`}`);
+      log.status(`[사용] 포인트 조회 실패 — ${maskPhone(phone)} · ${inquiryFailureNote(res)}`);
       sdk.template.openToast({ message: res.success === false ? res.error : "등록된 회원이 없습니다.", icon: "error" });
       return;
     }
@@ -220,7 +224,7 @@ async function handleLookupResult(
       `[사용] 중단 — ${maskPhone(phone)} · 보유 ${balance.toLocaleString()}P · ` +
       (cfg.isMinPointEnabled && cfg.minPoint > balance
         ? `최소 ${cfg.minPoint.toLocaleString()}P 이상부터 사용 가능`
-        : "사용할 포인트 없음"),
+        : "사용할 포인트 없음") + " · 정상 동작(고장 아님)",
     );
     void cancelUse({ source: ctx.source, message: CancelMessage.insufficient });
     clearContext();
