@@ -18,7 +18,7 @@
 import * as Sentry from "@sentry/browser";
 import { maskPiiText } from "../utils/pii-mask";
 import { log, readLinkLog } from "../utils/log";
-import { readLinkStatus } from "./link-status";
+import { readLinkStatus, formatLinkEntry } from "./link-status";
 
 /**
  * Sentry 프로젝트 DSN. 비워두면 수집하지 않는다.
@@ -120,9 +120,8 @@ export function sendDiagnostic(): boolean {
       "현재 상태": [
         `약국(사업자번호) : ${_merchant || "(확인 안 됨)"}`,
         `단말기(시리얼)   : ${_device   || "(확인 안 됨)"}`,
-        `캣포스     : ${status.캣포스}`,
-        `결제단말기 : ${status.결제단말기}`,
-        `마지막 변화 : ${status.갱신시각}`,
+        `캣포스     : ${formatLinkEntry(status.캣포스)}`,
+        `결제단말기 : ${formatLinkEntry(status.결제단말기)}`,
       ].join("\n"),
       "연동 기록": linkLog.length ? linkLog.join("\n") : "(기록 없음 — 플러그인이 재시작된 직후일 수 있습니다)",
       "기록 줄수": linkLog.length,
