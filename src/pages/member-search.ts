@@ -32,7 +32,7 @@ async function submitInquiry(phone: string): Promise<void> {
       goLookupFail({ phone, error: result.success === false ? result.error : undefined });
     }
   } catch (err) {
-    log.status(`[조회] 실패 — ${maskPhone(phone)} · 서버에 닿지 못함: ${(err as Error).message} · 소관: 네트워크(통신)`);
+    log.status(`[조회] 실패 — ${maskPhone(phone)} · 서버에 닿지 못함: ${(err as Error).message} · 확인 필요: 네트워크(통신)`);
     console.error("[MemberSearch] 조회 실패:", err);
     goLookupFail({ phone, error: `조회 중 오류가 발생했습니다. (${(err as Error).message})` });
   }

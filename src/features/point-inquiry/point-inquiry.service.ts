@@ -19,15 +19,16 @@ export type InquiryResult =
   | { success: false; error: string; notFound?: boolean };
 
 /**
- * 진단 기록에 적을 조회 실패 사유와 소관.
+ * 진단 기록에 적을 조회 실패 사유와, 어디를 봐야 하는지.
  *
  * 조회 실패는 대부분 미가입이다. 그걸 서버 장애와 같은 줄로 적으면 문의를 받은
  * 사람이 서버팀에 넘기게 된다. 어느 쪽인지 여기서 갈라 적는다.
  */
 export function inquiryFailureNote(res: InquiryResult): string {
-  if (res.success)  return "회원 정보가 비어 있음 · 소관: 플러그인(프론트)";
-  if (res.notFound) return `${res.error} · 정상 동작(고장 아님)`;
-  return `${res.error} · 소관: 서버(API)`;
+  if (res.success)  return "회원 정보가 비어 있음 · 확인 필요: 플러그인(프론트)";
+  // 미가입은 문구 자체가 고장이 아님을 말한다. 꼬리표를 더 붙이지 않는다.
+  if (res.notFound) return res.error;
+  return `${res.error} · 확인 필요: 서버(API)`;
 }
 
 type CustomerListDto = {

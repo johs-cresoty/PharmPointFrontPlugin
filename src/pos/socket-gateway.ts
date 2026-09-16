@@ -319,8 +319,8 @@ function create() {
     const onSendFailure = (reason: unknown): void => {
       const label = cmd ? catCommandLabel(cmd) : "형식 오류";
       // 팜포인트는 회신을 만들어 보내려 했고, 받을 쪽이 없어서 실패했다.
-      // 소관을 적어두지 않으면 "팜포인트가 응답을 안 줬다" 로 읽힌다.
-      log.status(`[팜포인트] ❌ ${label} 회신 못 보냄 — 캣포스 연결이 없습니다 · 소관: 캣포스`);
+      // 어디를 봐야 하는지 적어두지 않으면 "팜포인트가 응답을 안 줬다" 로 읽힌다.
+      log.status(`[팜포인트] ❌ ${label} 회신 못 보냄 — 캣포스 연결이 없습니다 · 확인 필요: 캣포스`);
       // 캣포스가 기다리는 회신이 날아가면 계산대가 멈춘다. 이건 올려야 한다.
       if (isAwaitedReply(cmd)) {
         reportLinkFailure(

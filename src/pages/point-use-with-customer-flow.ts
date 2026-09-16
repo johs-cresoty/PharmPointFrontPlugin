@@ -42,7 +42,7 @@ function setTossInputValue(value: number): void {
 export async function renderPointUseWithCustomerFlow(): Promise<void> {
   const ctx = loadContext();
   if (!ctx) {
-    log.status("[팜포인트] ❌ 포인트 사용(회원 지정) 화면 못 띄움 — 요청 정보가 비어 있음 · 소관: 플러그인(프론트)");
+    log.status("[팜포인트] ❌ 포인트 사용(회원 지정) 화면 못 띄움 — 요청 정보가 비어 있음 · 확인 필요: 플러그인(프론트)");
     returnToIdle();
     return;
   }
