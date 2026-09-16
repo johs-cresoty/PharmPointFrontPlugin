@@ -75,12 +75,12 @@ export async function renderPointEarnFlow(): Promise<void> {
   const payAmount = parseInt(String(ctx.transactionData.payAmount ?? "0"), 10) || 0;
 
   // 적립 화면이 실제로 떴다는 기록. 승인번호가 있어 영수증과 대조된다.
-  log.status(`[적립] 요청 접수 — 결제 ${payAmount.toLocaleString()}원 · 승인 ${approvalLabel(ctx.transactionData)}`);
+  log.status(`[팜포인트·적립] 요청 접수 — 결제 ${payAmount.toLocaleString()}원 · 승인 ${approvalLabel(ctx.transactionData)}`);
 
   // 고객이 끝까지 가지 않은 경우. "화면은 떴는데 적립이 안 됐다"는 문의에서
   // 중단인지 실패인지를 가르는 줄이다.
   const abortEarn = (reason: string): void => {
-    log.status(`[적립] 중단 — ${reason}`);
+    log.status(`[팜포인트·적립] 중단 — ${reason}`);
     void cancelEarn({ source: ctx.source, message: CancelMessage.back });
     returnToIdle();
   };
@@ -112,10 +112,10 @@ export async function renderPointEarnFlow(): Promise<void> {
     const p = est.success && est.data ? parseInt(String(est.data.pointAmount ?? "0"), 10) || 0 : 0;
     if (p > 0) {
       header.setEstimate(`${p.toLocaleString()}P 적립예상`);
-      log.status(`[적립] 적립예상 ${p.toLocaleString()}P`);
+      log.status(`[팜포인트·적립] 적립예상 ${p.toLocaleString()}P`);
     } else {
       // "적립예상이 안 보인다"는 문의의 근거. 조회가 실패한 것인지 원래 0P 인지 갈린다.
-      log.status(`[적립] 적립예상 표시 안 함 — ${est.success ? "적립 대상 금액 아님(0P)" : `조회 실패: ${est.error || "사유 미상"}`}`);
+      log.status(`[팜포인트·적립] 적립예상 표시 안 함 — ${est.success ? "적립 대상 금액 아님(0P)" : `조회 실패: ${est.error || "사유 미상"}`}`);
       log.info(`[earn-flow] 적립예상 미표시 (success=${est.success}, point=${p})`);
     }
   });
@@ -187,7 +187,7 @@ async function submitEarn(
   if (!result.success) {
     const errMsg = result.error || "적립 실패";
     // 어느 번호가 왜 실패했는지. 약국 문의에 되묻지 않고 답하려면 사유가 있어야 한다.
-    log.status(`[적립] ❌ 실패 — ${maskPhone(phone)} · 승인 ${approvalLabel(td)} · ${errMsg} · 확인 필요: 서버(API)`);
+    log.status(`[팜포인트·적립] ❌ 실패 — ${maskPhone(phone)} · 승인 ${approvalLabel(td)} · ${errMsg} · 확인 필요: 서버(API)`);
     sdk.template.openToast({ message: errMsg, icon: "error" });
     void cancelEarn({ source: ctx.source, message: errMsg });
     return;
@@ -200,7 +200,7 @@ async function submitEarn(
 
   // 이름은 남기지 않는다. 뒷 4자리만으로 약국이 말한 손님과 맞출 수 있다.
   log.status(
-    `[적립] 완료 — ${maskPhone(phone)} · 승인 ${approvalLabel(td)} · ` +
+    `[팜포인트·적립] 완료 — ${maskPhone(phone)} · 승인 ${approvalLabel(td)} · ` +
     `${earnPoint.toLocaleString()}P 적립 · 잔액 ${balancePoint.toLocaleString()}P`,
   );
 

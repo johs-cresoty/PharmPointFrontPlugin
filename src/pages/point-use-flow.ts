@@ -64,7 +64,7 @@ export async function renderPointUseFlow(): Promise<void> {
   }
 
   // 사용 요청은 결제 전이라 승인번호가 없다. 대조 키는 시각과 결제금액뿐이다.
-  log.status(`[사용] 요청 접수 — 결제 ${(ctx.payAmount || 0).toLocaleString()}원`);
+  log.status(`[팜포인트·사용] 요청 접수 — 결제 ${(ctx.payAmount || 0).toLocaleString()}원`);
 
   // CAT 요청 사전 차단 — 결제금액이 최소 사용 포인트 미만이면 번호 입력 화면을 띄우지 않고
   // 바로 결과 화면으로 라우팅 + CATPOS 에 FAIL 회신.
@@ -84,7 +84,7 @@ export async function renderPointUseFlow(): Promise<void> {
     const msg = `포인트를 사용할 수 없어요.\r\n결제 금액 ${payAmountFmt}원\r\n최소 사용 포인트 ${minPointFmt}P`;
     // 정상 동작인데 약국은 "고장났다"고 문의하는 대표 사례라 진단에 남긴다.
     log.status(
-      `[사용] 중단 — 결제금액 ${payAmountFmt}원이 최소 사용 기준 ${minPointFmt}P 미만 (번호 입력 화면 띄우지 않음)`,
+      `[팜포인트·사용] 중단 — 결제금액 ${payAmountFmt}원이 최소 사용 기준 ${minPointFmt}P 미만 (번호 입력 화면 띄우지 않음)`,
     );
     log.info(`[PointUse] 결제금액<최소포인트 사전차단 — payAmount=${ctx.payAmount}, minPoint=${cfg.minPoint}`);
     void SocketGateway.sendCATFail(msg);
@@ -102,7 +102,7 @@ export async function renderPointUseFlow(): Promise<void> {
   const inactivitySec = await getInactivityTimeoutSeconds();
   const stopTimeout = startInactivityTimeout({
     onTimeout: () => {
-      log.status(`[사용] 중단 — 고객이 ${inactivitySec}초간 조작 없음`);
+      log.status(`[팜포인트·사용] 중단 — 고객이 ${inactivitySec}초간 조작 없음`);
       void cancelUse({ source: ctx.source, message: CancelMessage.back });
       returnToIdle();
     },
@@ -134,7 +134,7 @@ function renderPhoneStep(
   });
 
   overlay.backBtnEl.addEventListener("click", () => {
-    log.status("[사용] 중단 — 고객이 뒤로가기");
+    log.status("[팜포인트·사용] 중단 — 고객이 뒤로가기");
     void cancelUse({ source: ctx.source, message: CancelMessage.back });
     returnToIdle();
   });
@@ -149,13 +149,13 @@ function renderPhoneStep(
     if (!exist.success || !exist.customer) {
       // 미가입인지 서버가 못 받은 것인지 갈라 남긴다. 화면 문구는 둘 다 같아서
       // 로그가 없으면 약국 문의만으로는 구분할 수 없다.
-      log.status(`[사용] 회원 조회 실패 — ${maskPhone(phone)} · ${inquiryFailureNote(exist)}`);
+      log.status(`[팜포인트·사용] 회원 조회 실패 — ${maskPhone(phone)} · ${inquiryFailureNote(exist)}`);
       sdk.template.openToast({ message: "등록된 회원이 없습니다.", icon: "error" });
       return;
     }
     const res = await getPointBalance(phone);
     if (!res.success || !res.customer) {
-      log.status(`[사용] 포인트 조회 실패 — ${maskPhone(phone)} · ${inquiryFailureNote(res)}`);
+      log.status(`[팜포인트·사용] 포인트 조회 실패 — ${maskPhone(phone)} · ${inquiryFailureNote(res)}`);
       sdk.template.openToast({ message: res.success === false ? res.error : "등록된 회원이 없습니다.", icon: "error" });
       return;
     }
@@ -186,7 +186,7 @@ function renderPhoneStep(
     },
     onSubmit: (phone) => { currentPhone = phone; syncBtn(); },
     onBack:   () => {
-      log.status("[사용] 중단 — 고객이 뒤로가기");
+      log.status("[팜포인트·사용] 중단 — 고객이 뒤로가기");
       void cancelUse({ source: ctx.source, message: CancelMessage.back });
       returnToIdle();
     },
@@ -215,13 +215,13 @@ async function handleLookupResult(
   const insufficient = (cfg.isMinPointEnabled && cfg.minPoint > balance) || balance < 1;
   const storeName = await getStoreName();
 
-  log.status(`[사용] 회원 조회됨 — ${maskPhone(phone)} · 보유 ${balance.toLocaleString()}P`);
+  log.status(`[팜포인트·사용] 회원 조회됨 — ${maskPhone(phone)} · 보유 ${balance.toLocaleString()}P`);
   log.info(`[PointUse] 잔액판정 balance=${balance}P, minPoint=${cfg.minPoint}(enabled=${cfg.isMinPointEnabled}) → ${insufficient ? "부족" : "사용가능"} / source=${ctx.source}`);
 
   if (insufficient) {
     // 왜 못 썼는지가 여기서 갈린다 — 기준 미달인지, 아예 잔액이 없는지.
     log.status(
-      `[사용] 중단 — ${maskPhone(phone)} · 보유 ${balance.toLocaleString()}P · ` +
+      `[팜포인트·사용] 중단 — ${maskPhone(phone)} · 보유 ${balance.toLocaleString()}P · ` +
       (cfg.isMinPointEnabled && cfg.minPoint > balance
         ? `최소 ${cfg.minPoint.toLocaleString()}P 이상부터 사용 가능`
         : "사용할 포인트 없음"),
@@ -299,7 +299,7 @@ function renderUseInputStep(
         balance, usePoint,
       });
       log.status(
-        `[사용] 완료 — ${maskPhone(phone)} · ${usePoint.toLocaleString()}P 사용 · ` +
+        `[팜포인트·사용] 완료 — ${maskPhone(phone)} · ${usePoint.toLocaleString()}P 사용 · ` +
         `남은 ${remainingPoint(balance, usePoint).toLocaleString()}P`,
       );
       clearContext();

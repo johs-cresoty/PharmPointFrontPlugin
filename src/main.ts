@@ -168,16 +168,16 @@ async function bootstrap(): Promise<void> {
         clearCart();
         if (getCurrentPath() === "/price-display") {
           navigate("/");
-          log.status("[장바구니] 갱신 → 가격표시 닫음 — 담긴 상품 없음");
+          log.status("[팜포인트·장바구니] 갱신 → 가격표시 닫음 — 담긴 상품 없음");
         } else {
-          log.status("[장바구니] 갱신 → 화면 변화 없음 — 담긴 상품 없고 가격표시 중도 아님");
+          log.status("[팜포인트·장바구니] 갱신 → 화면 변화 없음 — 담긴 상품 없고 가격표시 중도 아님");
         }
         return;
       }
       if (getCurrentPath() === "/price-display") {
         saveCart(cart);           // 라우터 재진입 시 초기 렌더용 스냅샷 보관
         updatePriceDisplay(cart); // 이미 진입 상태 → 실시간 갱신
-        log.status(`[장바구니] 갱신 → 가격표시 다시 그림 — ${amount}`);
+        log.status(`[팜포인트·장바구니] 갱신 → 가격표시 다시 그림 — ${amount}`);
         return;
       }
       // 고객이 조작 중인 화면(번호 입력·포인트 입력·약관 동의·결과·환경설정 등)에서는
@@ -190,12 +190,12 @@ async function bootstrap(): Promise<void> {
       if (path !== "/" || !isIdleActive()) {
         // "스캔했는데 가격표시가 안 떠요" 문의의 답이 대부분 여기다.
         // 고장이 아니라 고객이 조작 중이라 일부러 안 바꾼 것임을 명시한다.
-        log.status(`[장바구니] 갱신 → 가격표시 무시 — 고객이 조작 중인 화면(${screenName(path)})이라 그대로 둠`);
+        log.status(`[팜포인트·장바구니] 갱신 → 가격표시 무시 — 고객이 조작 중인 화면(${screenName(path)})이라 그대로 둠`);
         return;
       }
       saveCart(cart);             // renderPriceDisplay 가 읽을 스냅샷
       navigate("/price-display"); // 대기 상태에서 첫 수신 → 가격표시기 진입
-      log.status(`[장바구니] 갱신 → 가격표시 띄움 — ${amount}`);
+      log.status(`[팜포인트·장바구니] 갱신 → 가격표시 띄움 — ${amount}`);
     },
     // 단말기 005 — 바코드 표시. (006 회신은 AppSession 이 수신 즉시 처리)
     onBarcodeDisplay: (barcode) => {
@@ -224,11 +224,11 @@ async function bootstrap(): Promise<void> {
       clearCart();
       if (path === "/price-display") {
         navigate("/");
-        log.status("[장바구니] 비움 → 가격표시 닫고 대기화면 복귀");
+        log.status("[팜포인트·장바구니] 비움 → 가격표시 닫고 대기화면 복귀");
       } else {
         // "POS 에서 비웠는데 단말기에 그대로예요" 문의의 답이 여기다.
         // 전문은 받았고, 가격표시 중이 아니라 바꿀 화면이 없었다는 뜻이다.
-        log.status(`[장바구니] 비움 → 화면 변화 없음 — 가격표시 중이 아님(현재 ${screenName(path)})`);
+        log.status(`[팜포인트·장바구니] 비움 → 화면 변화 없음 — 가격표시 중이 아님(현재 ${screenName(path)})`);
       }
     },
   });

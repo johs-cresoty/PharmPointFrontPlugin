@@ -51,7 +51,7 @@ export async function renderPointUseWithCustomerFlow(): Promise<void> {
   const payAmount = ctx.payAmount || 0;
 
   // 캣포스가 고객을 이미 골라 보낸 경로라 번호가 오지 않는다. 대조 키는 시각·금액·보유 포인트.
-  log.status(`[사용] 요청 접수(회원 지정) — 결제 ${payAmount.toLocaleString()}원 · 보유 ${balance.toLocaleString()}P`);
+  log.status(`[팜포인트·사용] 요청 접수(회원 지정) — 결제 ${payAmount.toLocaleString()}원 · 보유 ${balance.toLocaleString()}P`);
 
   // 사전 차단 — 결제금액이 최소 사용 포인트 미만이면 포인트 입력 화면을 띄우지 않고
   // 바로 결과 화면으로 라우팅 + CATPOS 에 FAIL 회신. (point-use-flow 의 CAT 경로와 동일 정책)
@@ -62,7 +62,7 @@ export async function renderPointUseWithCustomerFlow(): Promise<void> {
     const payAmountFmt = payAmount.toLocaleString("ko-KR");
     const minPointFmt  = ctx.minPoint.toLocaleString("ko-KR");
     const msg = `포인트를 사용할 수 없어요.\r\n결제 금액 ${payAmountFmt}원\r\n최소 사용 포인트 ${minPointFmt}P`;
-    log.status(`[사용] 중단 — 결제금액 ${payAmountFmt}원이 최소 사용 기준 ${minPointFmt}P 미만 (포인트 입력 화면 띄우지 않음)`);
+    log.status(`[팜포인트·사용] 중단 — 결제금액 ${payAmountFmt}원이 최소 사용 기준 ${minPointFmt}P 미만 (포인트 입력 화면 띄우지 않음)`);
     log.info(`[PointUseWithCustomer] 결제금액<최소포인트 사전차단 — payAmount=${payAmount}, minPoint=${ctx.minPoint}`);
     void cancelUse({ source: ctx.source, message: msg });
     clearContext();
@@ -77,7 +77,7 @@ export async function renderPointUseWithCustomerFlow(): Promise<void> {
 
   if (insufficient) {
     log.status(
-      `[사용] 중단 — 보유 ${balance.toLocaleString()}P · ` +
+      `[팜포인트·사용] 중단 — 보유 ${balance.toLocaleString()}P · ` +
       (ctx.isMinPointEnabled && ctx.minPoint > balance
         ? `최소 ${ctx.minPoint.toLocaleString()}P 이상부터 사용 가능`
         : "사용할 포인트 없음"),
@@ -94,7 +94,7 @@ export async function renderPointUseWithCustomerFlow(): Promise<void> {
   const inactivitySec = await getInactivityTimeoutSeconds();
   const stopTimeout = startInactivityTimeout({
     onTimeout: () => {
-      log.status(`[사용] 중단 — 고객이 ${inactivitySec}초간 조작 없음`);
+      log.status(`[팜포인트·사용] 중단 — 고객이 ${inactivitySec}초간 조작 없음`);
       void cancelUse({ source: ctx.source, message: CancelMessage.back });
       returnToIdle();
     },
@@ -140,7 +140,7 @@ export async function renderPointUseWithCustomerFlow(): Promise<void> {
       const usePoint = Math.min(raw, maxPoint);
       await relayUseResult({ source: ctx.source, balance, usePoint });
       log.status(
-        `[사용] 완료(회원 지정) — ${usePoint.toLocaleString()}P 사용 · ` +
+        `[팜포인트·사용] 완료(회원 지정) — ${usePoint.toLocaleString()}P 사용 · ` +
         `남은 ${remainingPoint(balance, usePoint).toLocaleString()}P`,
       );
       clearContext();
@@ -150,7 +150,7 @@ export async function renderPointUseWithCustomerFlow(): Promise<void> {
       });
     },
     onBack: () => {
-      log.status("[사용] 중단 — 고객이 뒤로가기");
+      log.status("[팜포인트·사용] 중단 — 고객이 뒤로가기");
       void cancelUse({ source: ctx.source, message: CancelMessage.back });
       returnToIdle();
     },

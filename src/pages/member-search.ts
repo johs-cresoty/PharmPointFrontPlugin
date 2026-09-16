@@ -19,20 +19,20 @@ async function submitInquiry(phone: string): Promise<void> {
     if (!exist.success || !exist.customer) {
       // 화면 문구는 미가입이든 서버 오류든 똑같이 "등록된 회원이 없습니다" 라서
       // 로그로 갈라두지 않으면 문의를 받아도 원인을 알 수 없다.
-      log.status(`[조회] 실패 — ${maskPhone(phone)} · ${inquiryFailureNote(exist)}`);
+      log.status(`[팜포인트·조회] 실패 — ${maskPhone(phone)} · ${inquiryFailureNote(exist)}`);
       sdk.template.openToast({ message: "등록된 회원이 없습니다.", icon: "error" });
       return;
     }
     const result = await getPointBalance(phone);
     if (result.success && result.customer) {
-      log.status(`[조회] 완료 — ${maskPhone(phone)} · 보유 ${(result.customer.pointBalance || 0).toLocaleString()}P`);
+      log.status(`[팜포인트·조회] 완료 — ${maskPhone(phone)} · 보유 ${(result.customer.pointBalance || 0).toLocaleString()}P`);
       goLookupSuccess({ phone, customer: result.customer });
     } else {
-      log.status(`[조회] 실패 — ${maskPhone(phone)} · ${inquiryFailureNote(result)}`);
+      log.status(`[팜포인트·조회] 실패 — ${maskPhone(phone)} · ${inquiryFailureNote(result)}`);
       goLookupFail({ phone, error: result.success === false ? result.error : undefined });
     }
   } catch (err) {
-    log.status(`[조회] 실패 — ${maskPhone(phone)} · 서버에 닿지 못함: ${(err as Error).message} · 확인 필요: 네트워크(통신)`);
+    log.status(`[팜포인트·조회] 실패 — ${maskPhone(phone)} · 서버에 닿지 못함: ${(err as Error).message} · 확인 필요: 네트워크(통신)`);
     console.error("[MemberSearch] 조회 실패:", err);
     goLookupFail({ phone, error: `조회 중 오류가 발생했습니다. (${(err as Error).message})` });
   }
