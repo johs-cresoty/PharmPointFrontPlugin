@@ -23,7 +23,6 @@ import { renderSettings } from "./pages/settings";
 import { renderPriceDisplay, saveCart, clearCart, updatePriceDisplay } from "./pages/price-display";
 import { renderBarcodeDisplay, saveBarcode, clearBarcode } from "./pages/barcode-display";
 import { log } from "./utils/log";
-import { watchScreenSize } from "./utils/screen-size";
 
 // ─── 뷰 등록 ────────────────────────────────
 
@@ -106,7 +105,6 @@ async function bootstrap(): Promise<void> {
   // 진단 기록에 '시작' 이 두 번 찍혀 재시작한 것처럼 읽힌다. 본 화면에서만 남긴다.
   if (!isSettingsEntry()) {
     log.status(`[팜포인트] 시작 — 버전 ${__APP_VERSION__} · ${API_ENV_LABEL} 서버 사용`);
-    watchScreenSize();
   }
 
   await ensureInit();
