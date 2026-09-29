@@ -23,6 +23,7 @@ import { renderSettings } from "./pages/settings";
 import { renderPriceDisplay, saveCart, clearCart, updatePriceDisplay } from "./pages/price-display";
 import { renderBarcodeDisplay, saveBarcode, clearBarcode } from "./pages/barcode-display";
 import { log } from "./utils/log";
+import { watchScreenSize } from "./utils/screen-size";
 
 // ─── 뷰 등록 ────────────────────────────────
 
@@ -97,32 +98,6 @@ function isSettingsEntry(): boolean {
   return location.pathname.endsWith("/settings.html");
 }
 
-/**
- * 단말의 실제 화면 크기를 진단 기록에 남긴다.
- *
- * 토스·네이버 화면을 한 디자인으로 맞추기 위해 잰다. global.css 는 400×640 으로
- * 고정해 두었지만, 단말에서 실제로 쓸 수 있는 크기인지는 확인된 적이 없다.
- * (상태바 등이 자리를 차지하면 640 보다 작다)
- *
- * 기동 직후 크기가 아직 자리 잡지 않았을 수 있어, 바뀌면 한 번 더 남긴다.
- * 같은 값은 다시 남기지 않는다.
- */
-function logScreenSize(): void {
-  let last = "";
-  const write = (): void => {
-    const dpr = window.devicePixelRatio || 1;
-    const line =
-      `쓸 수 있는 화면 ${window.innerWidth}×${window.innerHeight} · 밀도 ${dpr}배 ` +
-      `(물리 ${Math.round(window.innerWidth * dpr)}×${Math.round(window.innerHeight * dpr)}) · ` +
-      `기기 전체 ${screen.width}×${screen.height}`;
-    if (line === last) return;
-    last = line;
-    log.status(`[팜포인트] 화면 크기 — ${line}`);
-  };
-  write();
-  window.addEventListener("resize", write);
-}
-
 async function bootstrap(): Promise<void> {
   // 오류 수집을 가장 먼저 건다 — 이후 초기화 단계에서 터지는 것도 잡아야 한다.
   initMonitoring(__APP_VERSION__);
@@ -131,7 +106,7 @@ async function bootstrap(): Promise<void> {
   // 진단 기록에 '시작' 이 두 번 찍혀 재시작한 것처럼 읽힌다. 본 화면에서만 남긴다.
   if (!isSettingsEntry()) {
     log.status(`[팜포인트] 시작 — 버전 ${__APP_VERSION__} · ${API_ENV_LABEL} 서버 사용`);
-    logScreenSize();
+    watchScreenSize();
   }
 
   await ensureInit();

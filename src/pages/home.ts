@@ -12,6 +12,7 @@ import { SocketGateway } from "../pos/socket-gateway";
 import { navigate, onCleanup } from "../router";
 import { mountPhoneOverlay, type PhoneOverlayHandles } from "./overlays";
 import { startInactivityTimeout } from "../features/inactivity/inactivity-timeout";
+import { logScreenSize } from "../utils/screen-size";
 
 const CAT_REQ_KEY = "pharm_cat_request_mode";
 
@@ -130,6 +131,9 @@ async function renderIdle(): Promise<void> {
     button: {
       text:    "포인트 조회",
       onClick: () => {
+        // 실시간 로그 뷰어를 기동 뒤에 열면 기동 때 남긴 화면 크기 줄을 놓친다.
+        // 누를 때마다 남겨, 언제 붙어도 확인할 수 있게 한다.
+        logScreenSize();
         // 화면 전환 중 SDK 가 버튼을 잠시 중앙으로 재배치하는 잔상 감춤.
         const app = document.getElementById("app");
         if (app) {
