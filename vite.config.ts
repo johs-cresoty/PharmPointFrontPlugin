@@ -1,9 +1,11 @@
 import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import pkg from "./package.json" with { type: "json" };
 
-// PharmPoint Toss 플러그인 SPA 개발/빌드 설정 (순수 TypeScript, React 미사용).
-// Toss SDK 가 자체 React 를 포함하므로 클라이언트는 SDK 위 얇은 로직만 담당.
+// PharmPoint Toss 플러그인 SPA 개발/빌드 설정.
+// 데이터 연동·흐름은 순수 TypeScript, 새 디자인 화면(src/ui)만 React 로 그린다.
+// (Toss SDK 도 자체 React 를 쓰지만 SDK 번들 안에 있어 우리 React 와 섞이지 않는다.)
 /**
  * 정적 파일(global.css · sdk.js)에 빌드마다 다른 값을 붙인다.
  *
@@ -29,7 +31,7 @@ function stampStaticAssets(): import("vite").Plugin {
 }
 
 export default defineConfig(({ command, mode }) => ({
-  plugins: [stampStaticAssets()],
+  plugins: [react(), stampStaticAssets()],
   define: {
     // Sentry release 태그(PLUGIN_ID@VERSION)와 기동 로그에 쓴다.
     // 단말에 올라간 번들이 방금 올린 것인지 콘솔로 바로 구분하기 위함.

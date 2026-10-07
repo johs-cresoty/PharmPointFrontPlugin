@@ -1,0 +1,41 @@
+/*
+ * 새 디자인 화면(React, src/ui) 스타일.
+ *
+ * Tailwind 의 기본 초기화(preflight)는 끈다 — tailwind.config.js 참고.
+ * 아직 Template API 로 그리는 화면의 토스 디자인 시스템 스타일을 건드리지 않기 위함이다.
+ * base 는 싣는다. preflight 를 끄면 base 에는 translate · ring 등이 쓰는 CSS 변수 기본값만
+ * 남는데, 이게 없으면 -translate-x-1/2 같은 클래스가 통째로 무시된다.
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * global.css 가 모든 요소(*)에 Toss Product Sans 를 지정한다.
+ * 상속이 아니라 요소마다 직접 걸리므로, 새 화면 안의 요소는 여기서 Figma 폰트로 되돌린다.
+ */
+.pp-stage,
+.pp-stage * {
+  font-family: "Noto Sans KR Variable", sans-serif;
+  box-sizing: border-box;
+}
+
+/*
+ * preflight 를 끈 대신 새 화면 안에서만 필요한 초기화.
+ * :where() 로 우선순위를 0 으로 둔다 — 그래야 mt-* · bg-* 같은 Tailwind 클래스가 이긴다.
+ */
+:where(.pp-stage) p,
+:where(.pp-stage) h1,
+:where(.pp-stage) h2 {
+  margin: 0;
+}
+:where(.pp-stage) button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+:where(.pp-stage) img {
+  display: block;
+}

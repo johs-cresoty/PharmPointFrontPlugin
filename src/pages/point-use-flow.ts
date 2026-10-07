@@ -5,15 +5,20 @@
  *   1) 전화번호 입력 → 회원 조회
  *   2) 잔액 검증 (미달·최소 미만 → 결과 화면으로)
  *   3) 사용 포인트 입력 → 사용 결과 송신 → Result 이동
+ *
+ * 1) 번호 입력은 새 디자인(Figma 04-4, src/ui/phone-input).
+ * 3) 사용 포인트 입력도 새 디자인(Figma 06-1 · 06-2, src/ui/use-point-input).
+ * 무입력 타이머는 두 화면이 각자 관리한다.
  */
 import { getCustomer, getPointBalance, inquiryFailureNote, type InquiryResult } from "../features/point-inquiry/point-inquiry.service";
 import { getInactivityTimeoutSeconds, getPointUseConfig } from "../features/app-config/app-config.service";
 import { cancelUse, CancelMessage, relayUseResult, remainingPoint, PointUseSource, type PointUseSourceType } from "../features/point-use/point-use.service";
-import { goUseSuccess, goInsufficient, goPayAmountBelowMinPoint } from "../features/result-page/result-navigator";
+import { goUseSuccess, goInsufficient } from "../features/result-page/result-navigator";
 import { SocketGateway } from "../pos/socket-gateway";
 import { navigate, onCleanup } from "../router";
-import { mountPhoneOverlay, type PhoneOverlayHandles } from "./overlays";
-import { startInactivityTimeout } from "../features/inactivity/inactivity-timeout";
+import { isUnreachable, showPhoneInput, type PhoneSubmitOutcome } from "../ui/phone-input";
+import { showUsePointInput } from "../ui/use-point-input";
+import { hideScreen } from "../ui/stage";
 import { log } from "../utils/log";
 import { maskPhone } from "../utils/pii-mask";
 
@@ -45,14 +50,6 @@ async function getStoreName(): Promise<string> {
   catch { return ""; }
 }
 
-function setTossInputValue(value: string | number): void {
-  const inp = document.querySelector("#app form input") as HTMLInputElement | null;
-  if (!inp) return;
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
-  setter.call(inp, String(value));
-  inp.dispatchEvent(new Event("input", { bubbles: true }));
-}
-
 // ─── 진입점 ──────────────────────────────
 
 export async function renderPointUseFlow(): Promise<void> {
@@ -66,150 +63,105 @@ export async function renderPointUseFlow(): Promise<void> {
   // 사용 요청은 결제 전이라 승인번호가 없다. 대조 키는 시각과 결제금액뿐이다.
   log.status(`[팜포인트·사용] 요청 접수 — 결제 ${(ctx.payAmount || 0).toLocaleString()}원`);
 
-  // CAT 요청 사전 차단 — 결제금액이 최소 사용 포인트 미만이면 번호 입력 화면을 띄우지 않고
-  // 바로 결과 화면으로 라우팅 + CATPOS 에 FAIL 회신.
-  // (기존 잔액-기반 insufficient 판정과 별개. 이건 회원 조회 이전 결제금액만으로 판정)
   const cfg = await getPointUseConfig();
+  const inactivitySec = await getInactivityTimeoutSeconds();
+  const header = { kind: "pay" as const, amount: ctx.payAmount || 0 };
+
+  // CAT 요청 사전 차단 — 결제금액이 최소 사용 포인트 미만이면 번호 입력 화면 위에
+  // "포인트를 사용할 수 없어요" 팝업(Figma 05-2 popup03)을 띄우고 CATPOS 에 FAIL 회신.
+  // [확인] 을 누르면 대기화면. (기존 잔액-기반 insufficient 판정과 별개. 회원 조회 이전 결제금액만으로 판정)
   if (
     ctx.source === PointUseSource.CAT
     && cfg.isMinPointEnabled
     && cfg.minPoint > 0
     && (ctx.payAmount || 0) < cfg.minPoint
   ) {
-    // FAIL 메시지 = 결과 화면 문구와 동일 (title + description 3줄 그대로).
-    // CATPOS 측 로그·안내에 결과 화면과 같은 정보가 남도록 통일.
+    // FAIL 메시지 = 팝업 문구와 같은 정보.
     // 줄바꿈은 \r\n (CRLF) — CATPOS(Delphi)의 TLabel/TMemo 는 LF 단독으로는 개행 인식 안 함.
     const payAmountFmt = (ctx.payAmount || 0).toLocaleString("ko-KR");
     const minPointFmt  = cfg.minPoint.toLocaleString("ko-KR");
     const msg = `포인트를 사용할 수 없어요.\r\n결제 금액 ${payAmountFmt}원\r\n최소 사용 포인트 ${minPointFmt}P`;
     // 정상 동작인데 약국은 "고장났다"고 문의하는 대표 사례라 진단에 남긴다.
     log.status(
-      `[팜포인트·사용] 중단 — 결제금액 ${payAmountFmt}원이 최소 사용 기준 ${minPointFmt}P 미만 (번호 입력 화면 띄우지 않음)`,
+      `[팜포인트·사용] 중단 — 결제금액 ${payAmountFmt}원이 최소 사용 기준 ${minPointFmt}P 미만 (사용 불가 팝업)`,
     );
     log.info(`[PointUse] 결제금액<최소포인트 사전차단 — payAmount=${ctx.payAmount}, minPoint=${cfg.minPoint}`);
     void SocketGateway.sendCATFail(msg);
     clearContext();
-    goPayAmountBelowMinPoint({ payAmount: ctx.payAmount || 0, minPoint: cfg.minPoint });
+    showPhoneInput({
+      header,
+      agreement: true,
+      inactivitySec,
+      onSubmit: async () => "done",
+      onClose: returnToIdle,
+      onTimeout: returnToIdle,
+      pointUnavailable: { payAmount: ctx.payAmount || 0, minPoint: cfg.minPoint, onConfirm: returnToIdle },
+    });
+    onCleanup(() => { hideScreen(); });
     return;
   }
 
-  let cleanupPhoneStep: (() => void) | null = null;
-  let cleanupUseStep:   (() => void) | null = null;
-
-  cleanupPhoneStep = renderPhoneStep(ctx, "", (fn) => { cleanupPhoneStep = fn; }, (fn) => { cleanupUseStep = fn; });
-
-  // 번호 입력 · 포인트 입력 두 단계 공통 무동작 타임아웃 (전역 터치 리셋이 두 단계 모두 커버).
-  const inactivitySec = await getInactivityTimeoutSeconds();
-  const stopTimeout = startInactivityTimeout({
-    onTimeout: () => {
-      log.status(`[팜포인트·사용] 중단 — 고객이 ${inactivitySec}초간 조작 없음`);
-      void cancelUse({ source: ctx.source, message: CancelMessage.back });
-      returnToIdle();
-    },
-    duration: inactivitySec,
-  });
-
-  onCleanup(() => {
-    stopTimeout();
-    cleanupPhoneStep?.();
-    cleanupUseStep?.();
-  });
-}
-
-function renderPhoneStep(
-  ctx: UseContext,
-  prefilledPhone: string,
-  setPhoneCleanup: (fn: () => void) => void,
-  setUseCleanup:   (fn: () => void) => void,
-): () => void {
-  let currentPhone = prefilledPhone || "";
-
-  // 상단 back 버튼만 있는 최소 오버레이 — padding-top 축소로 SDK 영역(input+keypad+button)이
-  // 640px 뷰포트 안에 안 잘리게 한다. 결제금액·안내문구는 SDK title/subtitle 로 이관.
-  const overlay = mountPhoneOverlay({
-    storeName: "",
-    hint:      "",
-    appMode:   "minimal-overlay",
-    agreement: true,
-  });
-
-  overlay.backBtnEl.addEventListener("click", () => {
-    log.status("[팜포인트·사용] 중단 — 고객이 뒤로가기");
+  const cancelByUser = (reason: string): void => {
+    log.status(`[팜포인트·사용] 중단 — ${reason}`);
     void cancelUse({ source: ctx.source, message: CancelMessage.back });
     returnToIdle();
+  };
+
+  showPhoneInput({
+    header,
+    agreement: true,
+    inactivitySec,
+    onSubmit: async (phone) => {
+      const outcome = await lookupForUse(phone);
+      if (outcome.kind !== "found") return outcome.kind;
+      const next = await handleLookupResult(ctx, phone, outcome.res);
+      if (next === "useStep") {
+        renderUseInputStep(ctx, phone, outcome.res, cfg, await getStoreName(), {
+          inactivitySec,
+          onTimeout: () => cancelByUser(`고객이 ${inactivitySec}초간 조작 없음`),
+        });
+      }
+      return "done";
+    },
+    onClose: () => cancelByUser("고객이 뒤로가기"),
+    onTimeout: () => cancelByUser(`고객이 ${inactivitySec}초간 조작 없음`),
   });
 
-  const syncBtn = (): void => {
-    overlay.confirmBtnEl.disabled = !(overlay.agreementEl.checked && currentPhone.length === 11);
-  };
-  overlay.agreementEl.addEventListener("change", syncBtn);
+  onCleanup(() => { hideScreen(); });
+}
 
-  const onSubmitPhone = async (phone: string): Promise<void> => {
+/** 번호로 회원 · 잔액 조회. 화면에 보일 결과(미가입 · 오류)도 여기서 정한다. */
+async function lookupForUse(
+  phone: string,
+): Promise<{ kind: "found"; res: Extract<InquiryResult, { success: true }> } | { kind: Exclude<PhoneSubmitOutcome, "done"> }> {
+  try {
     const exist = await getCustomer(phone);
     if (!exist.success || !exist.customer) {
-      // 미가입인지 서버가 못 받은 것인지 갈라 남긴다. 화면 문구는 둘 다 같아서
-      // 로그가 없으면 약국 문의만으로는 구분할 수 없다.
+      // 미가입인지 서버가 못 받은 것인지 갈라 남긴다.
       log.status(`[팜포인트·사용] 회원 조회 실패 — ${maskPhone(phone)} · ${inquiryFailureNote(exist)}`);
-      sdk.template.openToast({ message: "등록된 회원이 없습니다.", icon: "error" });
-      return;
+      return { kind: exist.success === false && !exist.notFound ? "server" : "notFound" };
     }
     const res = await getPointBalance(phone);
     if (!res.success || !res.customer) {
       log.status(`[팜포인트·사용] 포인트 조회 실패 — ${maskPhone(phone)} · ${inquiryFailureNote(res)}`);
-      sdk.template.openToast({ message: res.success === false ? res.error : "등록된 회원이 없습니다.", icon: "error" });
-      return;
+      return { kind: res.success === false && !res.notFound ? "server" : "notFound" };
     }
-    // Phone step 오버레이는 유지 (SDK 가 화면 전환 시 잔상 방지)
-    await handleLookupResult(ctx, phone, res, overlay, setPhoneCleanup, setUseCleanup);
-  };
-
-  const triggerSubmit = (): void => {
-    if (currentPhone.length !== 11) {
-      sdk.template.openToast({ message: "휴대폰 번호 11자리를 모두 입력해주세요.", icon: "error" }); return;
-    }
-    if (!overlay.agreementEl.checked) {
-      sdk.template.openToast({ message: "개인정보 제공 동의가 필요합니다.", icon: "error" }); return;
-    }
-    void onSubmitPhone(currentPhone);
-  };
-
-  sdk.template.renderInputPage({
-    type: "phone",
-    // 메인 = 목적 설명 / 보조 = 결제금액.
-    top:  {
-      title:    "포인트를 조회할게요",
-      subtitle: `${(ctx.payAmount || 0).toLocaleString()}원 결제`,
-    },
-    input: {
-      placeholder: "전화번호 입력",
-      onChange: (v) => { currentPhone = (v ?? "").replace(/\D/g, ""); syncBtn(); },
-    },
-    onSubmit: (phone) => { currentPhone = phone; syncBtn(); },
-    onBack:   () => {
-      log.status("[팜포인트·사용] 중단 — 고객이 뒤로가기");
-      void cancelUse({ source: ctx.source, message: CancelMessage.back });
-      returnToIdle();
-    },
-  });
-
-  overlay.confirmBtnEl.addEventListener("click", triggerSubmit);
-  syncBtn();
-
-  if (prefilledPhone) setTimeout(() => setTossInputValue(prefilledPhone), 50);
-
-  const cleanup = (): void => { overlay.remove(); };
-  setPhoneCleanup(cleanup);
-  return cleanup;
+    return { kind: "found", res };
+  } catch (err) {
+    const unreachable = isUnreachable(err);
+    log.status(
+      `[팜포인트·사용] 회원 조회 실패 — ${maskPhone(phone)} · ${unreachable ? "서버에 닿지 못함" : "처리 중 오류"}: ${(err as Error).message}` +
+      ` · 확인 필요: ${unreachable ? "네트워크(통신)" : "서버(API)"}`,
+    );
+    return { kind: unreachable ? "network" : "server" };
+  }
 }
 
 async function handleLookupResult(
   ctx: UseContext,
   phone: string,
   res: Extract<InquiryResult, { success: true }>,
-  phoneOverlay: PhoneOverlayHandles,
-  setPhoneCleanup: (fn: () => void) => void,
-  setUseCleanup: (fn: () => void) => void,
-): Promise<void> {
+): Promise<"insufficient" | "useStep"> {
   const cfg = await getPointUseConfig();
   const balance = res.customer.pointBalance || 0;
   const insufficient = (cfg.isMinPointEnabled && cfg.minPoint > balance) || balance < 1;
@@ -228,70 +180,32 @@ async function handleLookupResult(
     );
     void cancelUse({ source: ctx.source, message: CancelMessage.insufficient });
     clearContext();
-    goInsufficient({ storeName, minPoint: cfg.minPoint, balancePoint: balance });
-    return;
+    goInsufficient({ storeName, minPoint: cfg.minPoint, isMinPointEnabled: cfg.isMinPointEnabled, balancePoint: balance });
+    return "insufficient";
   }
-
-  // Phone step 오버레이 제거 후 use step 진입
-  phoneOverlay.remove();
-  setPhoneCleanup(() => { /* phone step 정리 완료 */ });
-
-  const useCleanup = renderUseInputStep(ctx, phone, res, balance, cfg, storeName);
-  setUseCleanup(useCleanup);
+  return "useStep";
 }
 
+// 사용 포인트 입력 — 새 디자인(Figma 06-1 · 06-2). 번호 입력 화면을 바꿔 띄운다.
 function renderUseInputStep(
   ctx: UseContext,
   phone: string,
   res: Extract<InquiryResult, { success: true }>,
-  balance: number,
   cfg: { minPoint: number; isMinPointEnabled: boolean },
   storeName: string,
-): () => void {
-  const app = document.getElementById("app");
-  if (app) {
-    app.style.transition = "opacity 0.25s ease-in";
-    app.style.opacity    = "0";
-  }
+  timer: { inactivitySec: number; onTimeout: () => void },
+): void {
+  const balance  = res.customer.pointBalance || 0;
+  const maxPoint = Math.min(balance, ctx.payAmount || balance);
+  const minUse   = cfg.isMinPointEnabled && cfg.minPoint > 0 ? cfg.minPoint : 1;
+  const minPoint = cfg.isMinPointEnabled ? cfg.minPoint : 0;
 
-  const maxPoint  = Math.min(balance, ctx.payAmount || balance);
-  const minUse    = cfg.isMinPointEnabled && cfg.minPoint > 0 ? cfg.minPoint : 1;
-  const disclaimer = cfg.isMinPointEnabled && cfg.minPoint > 0
-    ? `포인트는 최소 ${cfg.minPoint.toLocaleString("ko-KR")}P부터 사용 가능합니다`
-    : `사용 가능 포인트 ${maxPoint.toLocaleString("ko-KR")}P`;
-
-  let currentUse = 0;
-
-  const syncUseBtn = (): void => {
-    const el = document.getElementById("app");
-    if (!el) return;
-    el.classList.toggle("use-btn-disabled", currentUse < minUse);
-  };
-
-  sdk.template.renderInputPage({
-    type: "number",
-    top:  { title: "사용할 포인트를 입력해주세요", subtitle: `${balance.toLocaleString("ko-KR")}P 보유` },
-    input: {
-      placeholder: "포인트 입력",
-      onChange: (v) => {
-        let val = parseInt(String(v).replace(/[^0-9]/g, ""), 10) || 0;
-        if (val > maxPoint) { setTossInputValue(maxPoint); val = maxPoint; }
-        currentUse = val; syncUseBtn();
-      },
-    },
-    button:     { label: "사용하기" },
-    disclaimer,
-    onSubmit: async (value) => {
-      const raw = parseInt(String(value).replace(/[^0-9]/g, ""), 10) || 0;
-      if (cfg.isMinPointEnabled && cfg.minPoint > 0 && raw < cfg.minPoint) {
-        sdk.template.openToast({ message: `${cfg.minPoint.toLocaleString("ko-KR")}P 이상 입력해주세요`, icon: "error" });
-        return;
-      }
-      if (raw <= 0) {
-        sdk.template.openToast({ message: "사용 포인트를 입력해주세요.", icon: "error" });
-        return;
-      }
-      const usePoint = Math.min(raw, maxPoint);
+  showUsePointInput({
+    payAmount: ctx.payAmount || 0,
+    balance, maxPoint, minUse, minPoint,
+    inactivitySec: timer.inactivitySec,
+    onTimeout: timer.onTimeout,
+    onSubmit: async (usePoint) => {
       await relayUseResult({
         source:       ctx.source,
         phone,
@@ -309,18 +223,9 @@ function renderUseInputStep(
         customerName:   res.customer.customerName || "",
       });
     },
-    onBack: () => {
-      // 휴대폰 입력 단계로 복귀 — 컨텍스트 유지 상태에서 재진입
-      void navigate("/point-use-flow");
-    },
+    // X — 휴대폰 입력 단계로 복귀. 컨텍스트 유지 상태에서 재진입
+    onClose: () => { void navigate("/point-use-flow"); },
   });
-
-  setTimeout(syncUseBtn, 0);
-  setTimeout(() => { if (app) app.style.opacity = "1"; }, 300);
-
-  return (): void => {
-    if (app) app.style.opacity = "1";
-  };
 }
 
 // PointUseSource 는 use-flow 뷰가 참조하도록 export

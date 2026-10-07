@@ -1,97 +1,66 @@
 /**
  * MemberSearch 뷰 — 사용자가 대기화면에서 "포인트 조회" 를 눌러 진입.
  * 휴대폰 번호 입력 → getCustomer → getPointBalance → ResultNavigator 로 이동.
+ *
+ * 번호 입력 화면은 새 디자인(Figma 04-1 · 04-2 · 05-1, src/ui/phone-input).
+ *   미가입      → 입력란 아래 "등록된 회원이 없습니다" (번호를 고치면 사라진다)
+ *   서버 오류   → 서버 오류 팝업
+ *   연결 실패   → 네트워크 팝업 (다시 시도)
  */
 import { getCustomer, getPointBalance, inquiryFailureNote } from "../features/point-inquiry/point-inquiry.service";
-import { goLookupSuccess, goLookupFail } from "../features/result-page/result-navigator";
+import { goLookupSuccess } from "../features/result-page/result-navigator";
 import { navigate, onCleanup } from "../router";
-import { mountPhoneOverlay } from "./overlays";
-import { startInactivityTimeout } from "../features/inactivity/inactivity-timeout";
 import { getInactivityTimeoutSeconds } from "../features/app-config/app-config.service";
+import { isUnreachable, showPhoneInput, type PhoneSubmitOutcome } from "../ui/phone-input";
+import { hideScreen } from "../ui/stage";
 import { log } from "../utils/log";
 import { maskPhone } from "../utils/pii-mask";
 
-let currentPhone = "";
-
-async function submitInquiry(phone: string): Promise<void> {
+async function submitInquiry(phone: string): Promise<PhoneSubmitOutcome> {
   try {
     const exist = await getCustomer(phone);
     if (!exist.success || !exist.customer) {
-      // 화면 문구는 미가입이든 서버 오류든 똑같이 "등록된 회원이 없습니다" 라서
-      // 로그로 갈라두지 않으면 문의를 받아도 원인을 알 수 없다.
+      // 미가입이든 서버 오류든 로그로 갈라두지 않으면 문의를 받아도 원인을 알 수 없다.
       log.status(`[팜포인트·조회] 실패 — ${maskPhone(phone)} · ${inquiryFailureNote(exist)}`);
-      sdk.template.openToast({ message: "등록된 회원이 없습니다.", icon: "error" });
-      return;
+      return exist.success === false && !exist.notFound ? "server" : "notFound";
     }
     const result = await getPointBalance(phone);
     if (result.success && result.customer) {
       log.status(`[팜포인트·조회] 완료 — ${maskPhone(phone)} · 보유 ${(result.customer.pointBalance || 0).toLocaleString()}P`);
       goLookupSuccess({ phone, customer: result.customer });
-    } else {
-      log.status(`[팜포인트·조회] 실패 — ${maskPhone(phone)} · ${inquiryFailureNote(result)}`);
-      goLookupFail({ phone, error: result.success === false ? result.error : undefined });
+      return "done";
     }
+    log.status(`[팜포인트·조회] 실패 — ${maskPhone(phone)} · ${inquiryFailureNote(result)}`);
+    return result.success === false && !result.notFound ? "server" : "notFound";
   } catch (err) {
-    log.status(`[팜포인트·조회] 실패 — ${maskPhone(phone)} · 서버에 닿지 못함: ${(err as Error).message} · 확인 필요: 네트워크(통신)`);
+    const unreachable = isUnreachable(err);
+    log.status(
+      `[팜포인트·조회] 실패 — ${maskPhone(phone)} · ${unreachable ? "서버에 닿지 못함" : "처리 중 오류"}: ${(err as Error).message}` +
+      ` · 확인 필요: ${unreachable ? "네트워크(통신)" : "서버(API)"}`,
+    );
     console.error("[MemberSearch] 조회 실패:", err);
-    goLookupFail({ phone, error: `조회 중 오류가 발생했습니다. (${(err as Error).message})` });
+    return unreachable ? "network" : "server";
   }
-}
-
-function triggerSubmit(agreementEl: HTMLInputElement): void {
-  const phone = currentPhone || "";
-  if (phone.length !== 11) {
-    sdk.template.openToast({ message: "휴대폰 번호 11자리를 모두 입력해주세요.", icon: "error" });
-    return;
-  }
-  if (!agreementEl.checked) {
-    sdk.template.openToast({ message: "개인정보 제공 동의가 필요합니다.", icon: "error" });
-    return;
-  }
-  void submitInquiry(phone);
 }
 
 export async function renderMemberSearch(): Promise<void> {
-  currentPhone = "";
-
   const app = document.getElementById("app");
+  const inactivitySec = await getInactivityTimeoutSeconds();
 
-  // 오버레이 상단은 back 버튼 하나만 — minimal-overlay 모드로 padding-top 축소해
-  // 하단 SDK 영역(input + keypad + button) 이 잘리지 않게 한다.
-  // 매장명·hint 모두 표시 안 함(SDK 메인타이틀이 안내 역할).
-  const overlay = mountPhoneOverlay({ storeName: "", hint: "", appMode: "minimal-overlay" });
-
-  sdk.template.renderInputPage({
-    type: "phone",
-    // subtitle 은 non-breaking space( ) — 보이지는 않지만 라인 높이는 예약해
-    // 포인트 사용 화면(subtitle="15,000원 결제") 과 title·keypad 위치를 동일하게 유지.
-    top:  { title: "포인트를 조회할게요", subtitle: " " },
-    input: {
-      placeholder: "전화번호 입력",
-      onChange: (value) => { currentPhone = value; },
-    },
-    onSubmit: (phone) => { currentPhone = phone; },
-    onBack:   () => { navigate("/"); },
+  showPhoneInput({
+    header: { kind: "title", text: "휴대폰 번호를 입력하세요" },
+    agreement: true,
+    inactivitySec,
+    onSubmit: submitInquiry,
+    onClose: () => { navigate("/"); },
+    onTimeout: () => { navigate("/"); },
   });
 
-  overlay.backBtnEl.addEventListener("click",    () => { navigate("/"); });
-  overlay.confirmBtnEl.addEventListener("click", () => { triggerSubmit(overlay.agreementEl); });
-
-  // 대기화면에서 opacity 0 으로 페이드아웃 후 진입한 경우 다시 페이드인.
-  if (app) {
-    // 한 프레임 뒤에 opacity 복원 → 새 페이지 레이아웃 완성 후 자연스럽게 나타남
-    requestAnimationFrame(() => {
-      app.style.transition = "opacity 0.2s ease-in";
-      app.style.opacity    = "1";
-    });
-  }
-
-  const inactivitySec = await getInactivityTimeoutSeconds();
-  const stopTimeout = startInactivityTimeout({ onTimeout: () => { navigate("/"); }, duration: inactivitySec });
+  // 대기화면에서 opacity 0 으로 페이드아웃 후 진입한다. 새 화면이 덮으니 아래 #app 은 원래대로.
+  if (app) app.style.opacity = "1";
 
   onCleanup(() => {
-    stopTimeout();
-    overlay.remove();
+    hideScreen();
     if (app) app.style.opacity = "1";
   });
 }

@@ -1,20 +1,16 @@
 /**
- * Result 페이지 뷰 — sessionStorage 에서 컨텍스트 읽어 SDK 결과 화면 표시.
+ * Result 페이지 뷰 — sessionStorage 에서 컨텍스트 읽어 결과 화면 표시.
  *
  * type 분기 → 적립/사용/부족/조회.
+ *
+ * 적립 · 사용 · 포인트 부족 · 조회 성공은 새 디자인(React, src/ui/ResultScreen)으로 그린다.
+ * 결제금액<최소포인트는 결과 화면 대신 입력 화면 위 팝업으로 알린다.
+ * 조회 실패(등록된 회원 없음)는 번호 입력 화면 안 안내로 옮겨 여기서 뺐다.
  * 자동 종료 후 이동 경로는 ResultCtx.onTimeoutHref (라우터 path).
  */
 import { readContext, type ResultCtxData } from "../features/result-page/result-navigator";
-import {
-  showEarnSuccess,
-  showUseSuccess,
-  showInsufficientPoint,
-  showPayAmountBelowMinPoint,
-  showLookupSuccess,
-  showLookupFail,
-  type ResultButton,
-} from "../features/result-page/result-page.service";
 import { navigate } from "../router";
+import { showResult } from "../ui/show-result";
 
 const num = (v: unknown, fallback = 0): number =>
   Number.isFinite(v) ? (v as number) : parseInt(String(v ?? ""), 10) || fallback;
@@ -25,7 +21,6 @@ export function renderResult(): void {
   const app = document.getElementById("app");
   const ctx = readContext();
   const goHome   = (): void => { if (app) app.style.opacity = "1"; navigate(ctx?.onTimeoutHref ?? "/"); };
-  const goSearch = (): void => { navigate("/member-search"); };
 
   if (!ctx) { goHome(); return; }
 
@@ -41,49 +36,42 @@ export function renderResult(): void {
     app.style.opacity    = "1";
   };
 
-  const homeButton: ResultButton = { label: "처음으로", closeOnClick: true, onClick: goHome };
   const d: ResultCtxData = ctx.data;
 
   switch (ctx.type) {
     case "earn":
-      void showEarnSuccess({
+      void showResult({
+        mode:         "EARN",
         earnPoint:    num(d.earnPoint),
-        storeName:    str(d.storeName),
         balancePoint: num(d.balancePoint),
         customerName: str(d.customerName) || undefined,
-        onTimeout: goHome, buttons: [homeButton],
+        onDone: goHome,
       }).finally(reveal);
       return;
 
     case "use":
-      void showUseSuccess({
-        usePoint:       num(d.usePoint),
-        storeName:      str(d.storeName),
-        remainingPoint: num(d.remainingPoint),
-        customerName:   str(d.customerName) || undefined,
-        onTimeout: goHome, buttons: [homeButton],
+      void showResult({
+        mode:         "USE",
+        usePoint:     num(d.usePoint),
+        balancePoint: num(d.remainingPoint),
+        customerName: str(d.customerName) || undefined,
+        onDone: goHome,
       }).finally(reveal);
       return;
 
     case "insufficient":
-      void showInsufficientPoint({
-        storeName:    str(d.storeName),
-        minPoint:     num(d.minPoint),
+      // 최소 포인트 안내는 최소 포인트 설정이 켜져 있을 때만 보인다.
+      // (예전 컨텍스트에 값이 없으면 안내를 보이던 기존 동작을 유지)
+      void showResult({
+        mode:         "USE_UNAVAILABLE",
         balancePoint: num(d.balancePoint),
-        onTimeout: goHome, buttons: [homeButton],
-      }).finally(reveal);
-      return;
-
-    case "payAmountBelowMinPoint":
-      void showPayAmountBelowMinPoint({
-        payAmount: num(d.payAmount),
-        minPoint:  num(d.minPoint),
-        onTimeout: goHome, buttons: [homeButton],
+        minPoint:     d.isMinPointEnabled === false ? 0 : num(d.minPoint),
+        onDone: goHome,
       }).finally(reveal);
       return;
 
     case "lookup":
-      renderLookup(d, homeButton, goHome, goSearch, reveal);
+      renderLookup(d, goHome, reveal);
       return;
 
     default:
@@ -93,28 +81,13 @@ export function renderResult(): void {
   }
 }
 
-function renderLookup(
-  d: ResultCtxData,
-  homeButton: ResultButton,
-  goHome: () => void,
-  goSearch: () => void,
-  reveal: () => void,
-): void {
-  if (d.success === true && d.customer) {
-    const customer = d.customer as { customerName?: string; pointBalance?: number };
-    void showLookupSuccess({
-      customerName: customer.customerName,
-      pointBalance: num(customer.pointBalance),
-      onTimeout: goHome, buttons: [homeButton],
-    }).finally(reveal);
-    return;
-  }
-  void showLookupFail({
-    error: str(d.error) || undefined,
-    onTimeout: goHome,
-    buttons: [
-      { label: "다시 입력", closeOnClick: true, onClick: goSearch },
-      homeButton,
-    ],
+/** 조회 성공만 온다 — 실패(미가입 · 오류)는 번호 입력 화면이 그 자리에서 알린다. */
+function renderLookup(d: ResultCtxData, goHome: () => void, reveal: () => void): void {
+  const customer = (d.customer ?? {}) as { customerName?: string; pointBalance?: number };
+  void showResult({
+    mode:         "LOOKUP",
+    customerName: customer.customerName,
+    balancePoint: num(customer.pointBalance),
+    onDone: goHome,
   }).finally(reveal);
 }

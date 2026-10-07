@@ -5,6 +5,8 @@
  *   1) sessionStorage 컨텍스트 로드 (source / transactionData)
  *   2) estimate 병렬 시작 (badge 표시용)
  *   3) 사용자 휴대폰 번호 입력 → commitWithFallback → Result 로 이동
+ *
+ * 번호 입력 화면은 새 디자인(Figma 04-3, src/ui/phone-input). 결제금액 + 적립예상 배지.
  */
 import { commitWithFallback, estimate, cancelEarn, type CommitCommand } from "../features/point-earn/point-earn.service";
 import { CancelMessage, PointUseSource, type PointUseSourceType } from "../features/point-use/point-use.service";
@@ -12,9 +14,9 @@ import { goEarnSuccess } from "../features/result-page/result-navigator";
 import type { TransactionData } from "../pos/protocol/transaction-parser";
 import type { EstimateResult } from "../features/point-transaction/point-transaction.service";
 import { navigate, onCleanup } from "../router";
-import { mountPayHeader, mountConfirmFooter } from "./overlays";
-import { startInactivityTimeout } from "../features/inactivity/inactivity-timeout";
 import { getInactivityTimeoutSeconds } from "../features/app-config/app-config.service";
+import { showPhoneInput, type PhoneSubmitOutcome } from "../ui/phone-input";
+import { hideScreen } from "../ui/stage";
 import { log } from "../utils/log";
 import { maskPhone } from "../utils/pii-mask";
 
@@ -85,33 +87,30 @@ export async function renderPointEarnFlow(): Promise<void> {
     returnToIdle();
   };
 
-  const header = mountPayHeader({
-    // 적립예상 배지가 있는 화면이라 헤더가 높아 입력란이 잘림 → 안내문구 생략(공간 확보).
-    hint:         "",
-    showEstimate: true,
-    onBack:       () => abortEarn("고객이 뒤로가기"),
-  });
-  header.setAmount(`${payAmount.toLocaleString()}원 결제`);
-
-  const footer = mountConfirmFooter({ agreement: true });
-
-  let currentPhone = "";
-
-  const syncBtnState = (): void => {
-    footer.confirmBtnEl.disabled = !(footer.agreementEl.checked && currentPhone.length === 11);
-  };
-  footer.agreementEl.addEventListener("change", syncBtnState);
-
   // estimate 병렬 시작 — badge 채우기용
   const estimatePromise: Promise<EstimateResult> = estimate(ctx.transactionData)
     .catch((e) => { console.warn("[earn-flow] estimate error", e); return { success: false, error: String(e) } as EstimateResult; });
 
-  // 배지는 기본 숨김(공간은 유지). 유효한 예상 포인트(1P 이상)를 받았을 때만 노출한다.
+  const inactivitySec = await getInactivityTimeoutSeconds();
+  const header = { kind: "pay" as const, amount: payAmount, estimatePoint: null as number | null };
+
+  // 예상 조회가 늦게 끝나 이미 다른 화면으로 넘어갔으면 배지를 그리지 않는다 (무대를 다시 띄우지 않게).
+  let active = true;
+  const screen = showPhoneInput({
+    header,
+    agreement: true,
+    inactivitySec,
+    onSubmit: (phone) => submitEarn(ctx, phone, estimatePromise),
+    onClose: () => abortEarn("고객이 뒤로가기"),
+    onTimeout: () => abortEarn(`고객이 ${inactivitySec}초간 조작 없음`),
+  });
+
+  // 배지는 유효한 예상 포인트(1P 이상)를 받았을 때만 노출한다.
   // 조회 실패거나 0P 면 "0P 적립예상" 대신 아무것도 보이지 않게 둔다.
   void estimatePromise.then((est) => {
     const p = est.success && est.data ? parseInt(String(est.data.pointAmount ?? "0"), 10) || 0 : 0;
     if (p > 0) {
-      header.setEstimate(`${p.toLocaleString()}P 적립예상`);
+      if (active) screen.update({ header: { ...header, estimatePoint: p } });
       log.status(`[팜포인트·적립] 적립예상 ${p.toLocaleString()}P`);
     } else {
       // "적립예상이 안 보인다"는 문의의 근거. 조회가 실패한 것인지 원래 0P 인지 갈린다.
@@ -120,44 +119,18 @@ export async function renderPointEarnFlow(): Promise<void> {
     }
   });
 
-  sdk.template.renderInputPage({
-    type: "phone",
-    top:  { title: "", subtitle: "" },
-    input: {
-      placeholder: "전화번호 입력",
-      onChange: (v) => { currentPhone = (v ?? "").replace(/\D/g, ""); syncBtnState(); },
-    },
-    onSubmit: (phone) => { currentPhone = phone; syncBtnState(); },
-    onBack:   () => abortEarn("고객이 뒤로가기"),
-  });
-
-  footer.confirmBtnEl.addEventListener("click", () => void submitEarn(ctx, currentPhone, estimatePromise, footer.agreementEl));
-
-  syncBtnState();
-
-  const inactivitySec = await getInactivityTimeoutSeconds();
-  const stopTimeout = startInactivityTimeout({
-    onTimeout: () => abortEarn(`고객이 ${inactivitySec}초간 조작 없음`),
-    duration:  inactivitySec,
-  });
-
-  onCleanup(() => { stopTimeout(); header.remove(); footer.remove(); });
+  onCleanup(() => { active = false; hideScreen(); });
 }
 
+/**
+ * 적립 확정. 번호 11자리 · 동의 여부는 화면이 이미 확인했다(조건이 안 되면 확인 버튼이 눌리지 않음).
+ * 실패는 서버 오류 팝업으로 알린다 — 예전처럼 캣포스에는 취소를 회신한다.
+ */
 async function submitEarn(
   ctx: EarnContext,
   phone: string,
   estimatePromise: Promise<EstimateResult>,
-  agreementEl: HTMLInputElement,
-): Promise<void> {
-  if (phone.length !== 11) {
-    sdk.template.openToast({ message: "휴대폰 번호 11자리를 모두 입력해주세요.", icon: "error" });
-    return;
-  }
-  if (!agreementEl.checked) {
-    sdk.template.openToast({ message: "개인정보 제공 동의가 필요합니다.", icon: "error" });
-    return;
-  }
+): Promise<PhoneSubmitOutcome> {
 
   const td = ctx.transactionData;
   let sleSeq = "";
@@ -188,9 +161,8 @@ async function submitEarn(
     const errMsg = result.error || "적립 실패";
     // 어느 번호가 왜 실패했는지. 약국 문의에 되묻지 않고 답하려면 사유가 있어야 한다.
     log.status(`[팜포인트·적립] ❌ 실패 — ${maskPhone(phone)} · 승인 ${approvalLabel(td)} · ${errMsg} · 확인 필요: 서버(API)`);
-    sdk.template.openToast({ message: errMsg, icon: "error" });
     void cancelEarn({ source: ctx.source, message: errMsg });
-    return;
+    return "server";
   }
 
   const balancePoint = parseInt(result.data.pointBalance, 10) || 0;
@@ -206,4 +178,5 @@ async function submitEarn(
 
   clearContext();
   goEarnSuccess({ earnPoint, storeName, balancePoint, customerName });
+  return "done";
 }
