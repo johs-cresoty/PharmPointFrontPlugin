@@ -6,7 +6,10 @@
  * 예전에는 SDK 템플릿 타이머(sdk.template.startTimer)의 내장 팝업을 썼다.
  *
  *   - duration 초 동안 화면 터치가 없으면, 마지막 warnAt 초 동안 팝업을 띄우고 0 이 되면 onTimeout.
- *   - 화면 어디든 터치하면 처음부터 다시 센다. 팝업이 떠 있을 때 팝업을 눌러도 같다.
+ *   - 화면 어디든 터치하면 처음부터 다시 센다.
+ *   - 팝업이 떠 있는 동안은 [계속 사용할게요] 로만 닫힌다. 다른 곳을 눌러도 닫히지 않는다.
+ *     (손가락이 닿는 순간 팝업을 닫으면, 손을 뗄 때 생기는 클릭이 팝업 뒤 화면에 들어가 같이 눌린다.
+ *      팝업의 어두운 바탕이 뒤 화면을 덮어, 팝업이 떠 있는 동안 뒤 화면은 눌리지 않는다)
  *   - 팝업은 덮개(showOverlay)에 그려 Template API 화면 · 새 화면 어디 위에나 뜬다.
  *   - 화면 이탈 시 반환된 stop 을 반드시 호출할 것.
  *
@@ -69,9 +72,9 @@ export function startInactivityTimeout(opts: InactivityTimeoutOptions): () => vo
     }, preWarnMs);
   };
 
-  // 화면 터치 시 처음부터. capture 단계라 팝업 · 버튼 클릭보다 먼저 받는다.
+  // 화면 터치 시 처음부터. 경고 팝업이 떠 있을 때는 무시 — [계속 사용할게요] 클릭(begin)으로만 닫는다.
   const onPointerDown = (): void => {
-    if (!disposed) begin();
+    if (!disposed && !warning) begin();
   };
 
   const dispose = (): void => {

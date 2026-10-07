@@ -76,10 +76,10 @@ function UsePointInputScreen(o: UsePointInputOptions) {
   };
 
   // 무입력 타이머 — 화면 어디를 눌러도 처음부터. 처리 중 · 팝업 중에는 멈춘다.
-  const { warnLeft, reset } = useInactivity(o.inactivitySec, submitting || !!unavailable, o.onTimeout);
+  const { warnLeft, activity, reset } = useInactivity(o.inactivitySec, submitting || !!unavailable, o.onTimeout);
 
   return (
-    <div className="h-full w-full" onPointerDown={reset}>
+    <div className="h-full w-full" onPointerDown={activity}>
       <UsePointView
         payAmount={o.payAmount}
         usePoint={usePoint}
