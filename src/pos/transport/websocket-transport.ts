@@ -12,6 +12,7 @@
 import { SocketConfig as cfg } from "../socket-config";
 import { maskPiiText } from "../../utils/pii-mask";
 import { log } from "../../utils/log";
+import { setLinkStatus } from "../../monitoring/link-status";
 import { isPageActive } from "../../utils/page-active";
 
 /**
@@ -97,6 +98,7 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
 
       onConnection: ({ connectionId }) => {
         state.connectionId = connectionId;
+        setLinkStatus("캣포스", "연결됨");
 
         // 끊긴 것으로 기록하려던 참이면 취소한다 — 재접속했으니 끊긴 게 아니다.
         if (state.dropTimer) { clearTimeout(state.dropTimer); state.dropTimer = null; }
@@ -128,6 +130,7 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
         // 설정 화면으로 옮겨가면 이 웹뷰가 내려가면서 캣포스도 떨어져 나간다.
         // 고장이 아니라 화면을 벗어난 것이므로 끊김으로 남기지 않는다.
         if (!isPageActive()) {
+          setLinkStatus("캣포스", "화면 이탈");
           return;
         }
 
@@ -139,6 +142,7 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
           state.dropTimer = null;
           if (state.connectionId || !isPageActive()) return; // 돌아왔거나 화면을 벗어남
           state.dropLogged = true;
+          setLinkStatus("캣포스", "연결 끊김");
           log.status(`[캣포스] 끊김 — ${CATPOS_DROP_GRACE_MS / 60_000}분간 재접속 없음`);
         }, CATPOS_DROP_GRACE_MS);
       },

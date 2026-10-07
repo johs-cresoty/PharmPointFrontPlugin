@@ -60,12 +60,18 @@ interface TossStorageApi {
   remove(opts: { key: string }):                 Promise<void>;
 }
 
+// Template API — 플러그인 설정 화면(settings.html)의 토스트만 쓴다.
+interface TossTemplateApi {
+  openToast(opts: { message: string; icon?: "success" | "error" }): void;
+}
+
 interface TossSdk {
   app:       TossAppApi;
   serial:    TossSerialApi;
   van:       TossVanApi;
   websocket: TossWebSocketApi;
   storage:   TossStorageApi;
+  template:  TossTemplateApi;
   // 다른 영역 (payment 등) 은 Phase 3 에서 확장
   [key: string]: unknown;
 }

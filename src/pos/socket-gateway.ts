@@ -23,6 +23,7 @@ import { createVanTransport, type VanTransport } from "./transport/van-transport
 import { maskPiiText } from "../utils/pii-mask";
 import { log } from "../utils/log";
 import { reportLinkFailure } from "../monitoring/sentry";
+import { setLinkStatus } from "../monitoring/link-status";
 import { catCommandLabel, terminalCommandLabel } from "./protocol/command-names";
 import { SocketConfig } from "./socket-config";
 
@@ -259,6 +260,9 @@ function create() {
     // 어느 쪽이 못 떴는지 바로 보이게 하기 위함.
     const wsOk  = wsRes.status  === "fulfilled";
     const serOk = serRes.status === "fulfilled";
+    // 여기서 "대기 중" 은 아직 아무도 안 붙었다는 뜻이다. 붙으면 각자 "연결됨" 으로 바뀐다.
+    setLinkStatus("캣포스",    wsOk  ? "연결 대기 중" : "준비 실패");
+    setLinkStatus("결제단말기", serOk ? "연결 대기 중" : "준비 실패");
     log.status(
       `[팜포인트] ${wsOk && serOk ? "받을 준비 완료" : "❌ 받을 준비 실패"} — ` +
       `캣포스 ${wsOk ? `대기(포트 ${SocketConfig.port})` : "포트 열기 실패"} · ` +

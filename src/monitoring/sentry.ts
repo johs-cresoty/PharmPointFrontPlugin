@@ -17,7 +17,8 @@
  */
 import * as Sentry from "@sentry/browser";
 import { maskPiiText } from "../utils/pii-mask";
-import { log } from "../utils/log";
+import { log, readLinkLog } from "../utils/log";
+import { readLinkStatus, formatLinkEntry } from "./link-status";
 
 /**
  * Sentry 프로젝트 DSN. 비워두면 수집하지 않는다.
@@ -59,7 +60,14 @@ export function setTerminalTags(businessNumber: string, serialNumber: string): v
   if (!SENTRY_DSN) return;
   if (businessNumber) Sentry.setTag("merchant", businessNumber);
   if (serialNumber)   Sentry.setTag("device",   serialNumber);
+  _merchant = businessNumber;
+  _device   = serialNumber;
 }
+
+// 진단 본문에도 함께 싣기 위해 들고 있는다. 태그는 Sentry 화면 위쪽에 따로 뜨는데,
+// 진단 기록을 통째로 복사해 공유할 때 어느 단말인지 같이 붙어 오게 하려는 것.
+let _merchant = "";
+let _device   = "";
 
 /**
  * 연동이 끊긴 상태를 오류로 올린다.
@@ -74,6 +82,76 @@ export function reportLinkFailure(message: string, detail?: unknown): void {
     level: "error",
     extra: detail === undefined ? undefined : { detail: String(detail) },
   });
+}
+
+/** 진단 보내기 연타 방지 — 이 시간 안에 다시 누르면 무시한다. */
+const DIAGNOSTIC_COOLDOWN_MS = 60_000;
+let lastDiagnosticAt = 0;
+
+/**
+ * 최근 상황을 Sentry 로 한 번 올린다 (설정 화면 '진단 보내기').
+ *
+ * 약국에서 "안 된다"는 문의가 왔을 때 쓰는 수단이다.
+ * 연동이 안 되는 상황은 대부분 오류가 아니라 '아무 일도 안 일어나는' 상태라
+ * 자동으로는 아무것도 올라가지 않는다. 그래서 사람이 눌러 올린다.
+ *
+ * 보내는 것은 이 시점의 breadcrumb(최근 100건)과 매장 태그뿐이다.
+ * 로그는 메모리에만 쌓이고 상한이 있어, 오래 켜뒀어도 양은 늘 같다.
+ *
+ * @returns 전송했으면 true. 수집이 꺼져 있거나 연타면 false.
+ */
+export function sendDiagnostic(): boolean {
+  if (!SENTRY_DSN) return false;
+
+  const now = Date.now();
+  if (now - lastDiagnosticAt < DIAGNOSTIC_COOLDOWN_MS) return false;
+  lastDiagnosticAt = now;
+
+  // 설정 화면(settings.html)은 포인트 화면과 실행 환경이 달라 breadcrumb 이 비어 있다.
+  // 두 화면이 함께 읽는 곳에 따로 보관해 둔 기록을 실어 보낸다.
+  const linkLog = readLinkLog();
+  const status  = readLinkStatus();
+
+  Sentry.captureMessage("진단 보내기 — 사용자가 요청한 상태 보고", {
+    level: "info",
+    extra: {
+      // 로그는 '일어난 일'만 남는다. 거래가 없던 동안에는 아무 줄도 없어서
+      // 로그만으로는 지금 붙어 있는지 알 수 없다. 현재 값을 따로 싣는다.
+      "현재 상태": [
+        `약국(사업자번호) : ${_merchant || "(확인 안 됨)"}`,
+        `단말기(시리얼)   : ${_device   || "(확인 안 됨)"}`,
+        `캣포스     : ${formatLinkEntry(status.캣포스)}`,
+        `결제단말기 : ${formatLinkEntry(status.결제단말기)}`,
+      ].join("\n"),
+      // 기록을 읽는 사람이 프로토콜을 모른다는 전제로 쓴다.
+      // 문의의 8할이 "누구 탓이냐" 라서, 줄머리만으로 그게 갈리게 해뒀다.
+      "읽는 법": [
+        "줄머리 대괄호 안이 그 일을 한 주체입니다.",
+        "  [캣포스]   POS 가 보낸 것    — 이 줄이 없으면 POS 가 안 보낸 것입니다",
+        "  [단말기]   결제단말기가 보낸 것 — 이 줄이 없으면 단말기가 안 보낸 것입니다",
+        "  [팜포인트] 팜포인트가 한 것   — 화면 전환 · 회신 · 기동",
+        "  [팜포인트·장바구니] [팜포인트·적립] [팜포인트·사용] [팜포인트·조회]",
+        "             팜포인트가 그 업무를 처리한 결과입니다",
+        "",
+        "'화면이 안 뜬다' 문의는 이렇게 가릅니다.",
+        "  [캣포스]/[단말기] 줄이 없다      → 신호 자체가 안 왔습니다 (POS·단말기 쪽을 보세요)",
+        "  줄은 있는데 처리 결과가 없다     → 팜포인트가 받고도 처리 못 한 것입니다",
+        "  '무시' · '변화 없음' 이 있다     → 팜포인트가 일부러 안 바꾼 것입니다",
+        "",
+        "'· 확인 필요: ○○' 은 어디를 봐야 하는지입니다.",
+        "  캣포스          POS 쪽을 봐야 합니다",
+        "  단말기          결제단말기·시리얼 연결을 봐야 합니다",
+        "  플러그인(프론트) 이 앱 코드를 고쳐야 합니다",
+        "  서버(API)       백엔드를 봐야 합니다",
+        "  네트워크(통신)   서버에 닿지 못했습니다",
+        "",
+        "'확인 필요' 가 없는 줄은 고칠 것이 없는 줄입니다.",
+      ].join("\n"),
+      "연동 기록": linkLog.length ? linkLog.join("\n") : "(기록 없음 — 플러그인이 재시작된 직후일 수 있습니다)",
+      "기록 줄수": linkLog.length,
+    },
+  });
+  return true;
 }
 
 export function initMonitoring(version: string): void {

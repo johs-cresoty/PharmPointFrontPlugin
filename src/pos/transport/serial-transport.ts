@@ -19,6 +19,7 @@ import { SocketConstants as C } from "../protocol/socket-constants";
 import { findPiiByteRanges } from "../../utils/pii-mask";
 import { log } from "../../utils/log";
 import { reportLinkFailure } from "../../monitoring/sentry";
+import { setLinkStatus } from "../../monitoring/link-status";
 import { isPageActive } from "../../utils/page-active";
 
 // 버퍼 상한 — TRM 시그니처를 못 찾고 과다 누적되는 상황 방어.
@@ -188,6 +189,7 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
       link.aliveSince   = now;
       link.lastAliveLog = now;
       link.rxSinceLog   = 1;
+      setLinkStatus("결제단말기", "연결됨");
       log.status("[단말기] 신호 들어옴 — 연결 확인");
     } else if (now - link.lastAliveLog >= LINK_ALIVE_LOG_MS) {
       const sec = Math.round((now - link.lastAliveLog) / 1000);
@@ -213,9 +215,11 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
       // 수신이 멈춘다. 고장이 아니라 화면을 벗어난 것이므로 끊김으로 남기지 않는다.
       // (남기면 2분 감시에 걸려 멀쩡한 단말이 장애로 보고된다)
       if (!isPageActive()) {
+        setLinkStatus("결제단말기", "화면 이탈");
         return;
       }
 
+      setLinkStatus("결제단말기", "연결 끊김");
       log.status(`[단말기] 끊김 — ${LINK_IDLE_MS / 1000}초간 신호 없음`);
 
       // 잠깐 끊기는 것은 흔하다. 계속 끊겨 있을 때만 Sentry 로 올린다.
