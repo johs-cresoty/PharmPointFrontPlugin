@@ -17,6 +17,14 @@ export default {
         display: ['"Noto Sans KR Variable"', "sans-serif"],
       },
       colors: {
+        // 가격표시기(src/ui/PriceDisplayView) 전용 — 네이버 tailwind.config.js 의 display-* 와 같다.
+        display: {
+          primary:    "#0D152A", // Primary    — 본문·금액 텍스트
+          sub01:      "#E8F4FF", // sub01      — 금액 카드·적립예상 캡슐 배경
+          secondary:  "#CDE7FF", // Secondary  — 최근 스캔 상품 행 강조
+          background: "#C9E3F8", // Background — 화면 배경
+          "sub01-dark": "rgba(205,231,255,0.2)", // sub01_dark_mode — 다크모드 금액 카드·캡슐 바탕 (Figma 02-2)
+        },
         ui: {
           primary:        "#0D92FA", // Primary      — 제목·포인트·확인 버튼
           text:           "#0D152A", // Text         — 본문(고객명)

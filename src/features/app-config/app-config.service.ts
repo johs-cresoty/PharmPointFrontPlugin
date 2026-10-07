@@ -57,13 +57,6 @@ export async function getPointUseConfig(): Promise<{ minPoint: number; isMinPoin
   return { minPoint, isMinPointEnabled: enabled };
 }
 
-// ── 대기 화면 매장명 표시 ────────────────────
-
-export async function getShowStoreName(): Promise<boolean> {
-  const raw = await readString(StorageKeys.SHOW_STORE_NAME, null);
-  return raw === null || raw === "" ? true : raw === "true";
-}
-
 // ── 결과 화면 대기 시간 ──────────────────────
 // SDK ResultPage 가 timerMs 를 [3, 10] 초로 clamp 함.
 
@@ -106,4 +99,38 @@ export async function setInactivityTimeoutSeconds(seconds: number): Promise<numb
   const n = Number.isFinite(parsed) && parsed > 0 ? parsed : StorageDefaults.INACTIVITY_TIMEOUT_SECONDS;
   await writeString(StorageKeys.INACTIVITY_TIMEOUT_SECONDS, n);
   return n;
+}
+
+// ── 최소 사용 포인트 (환경설정 화면) ─────────
+// 화면(Figma 09-3)은 사용 여부 토글과 값을 따로 받는다. 미사용으로 바꿔도 값은 남겨 둔다.
+
+export async function setMinPointConfig(enabled: boolean, minPoint: number): Promise<void> {
+  const n = Math.max(0, parseInt(String(minPoint), 10) || 0);
+  await writeString(StorageKeys.MIN_POINT, n);
+  await writeString(StorageKeys.IS_MIN_POINT_ENABLED, enabled && n > 0);
+}
+
+// ── 대기화면 배경 테마 ───────────────────────
+
+export async function getIdleThemeIndex(): Promise<number> {
+  const raw = await readString(StorageKeys.IDLE_THEME_INDEX, null);
+  const n = parseInt(raw ?? "", 10);
+  return Number.isFinite(n) && n >= 0 ? n : StorageDefaults.IDLE_THEME_INDEX;
+}
+
+export async function setIdleThemeIndex(index: number): Promise<void> {
+  await writeString(StorageKeys.IDLE_THEME_INDEX, Math.max(0, Math.trunc(index) || 0));
+}
+
+// ── 가격표시 테마 ────────────────────────────
+
+export type PriceDisplayTheme = "LIGHT" | "DARK";
+
+export async function getPriceDisplayTheme(): Promise<PriceDisplayTheme> {
+  const raw = await readString(StorageKeys.PRICE_DISPLAY_THEME, null);
+  return String(raw ?? "").toUpperCase() === "DARK" ? "DARK" : StorageDefaults.PRICE_DISPLAY_THEME;
+}
+
+export async function setPriceDisplayTheme(theme: PriceDisplayTheme): Promise<void> {
+  await writeString(StorageKeys.PRICE_DISPLAY_THEME, theme);
 }

@@ -2,9 +2,7 @@
  * ResultNavigator — 결과 화면 라우팅 캡슐화.
  *
  * 각 flow (earn / use / lookup 등) 는 결과 데이터를 sessionStorage 에 세팅한 뒤
- * "/result" 로 라우터 이동. Result 뷰가 이 컨텍스트를 읽어 SDK 결과 페이지를 렌더.
- *
- * ResultPageService 는 Result 뷰 안에서만 사용된다 (SDK 호출 계층).
+ * "/result" 로 라우터 이동. Result 뷰가 이 컨텍스트를 읽어 결과 화면(src/ui/show-result)을 그린다.
  * flow 는 반드시 ResultNavigator 를 통해 결과 화면을 표시.
  */
 import { navigate } from "../../router";

@@ -44,6 +44,8 @@ interface TossAppApi {
   getSerialNumber(): Promise<string | { serialNumber?: string; serial?: string; id?: string; value?: string }>;
   getMerchant(): Promise<{ id?: string; businessNumber?: string; name?: string }>;
   setIdle(): Promise<void>;
+  /** 토스 단말기 설정 화면을 연다. */
+  openSetting(): Promise<void>;
 }
 
 // VAN(밴) 결제모듈 — KIS 전문 전달용. write 만 사용.

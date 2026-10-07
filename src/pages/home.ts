@@ -4,7 +4,8 @@
  * 특수 진입 (CAT_REQUEST_NUM / CAT_REQUEST_CUSTOMER) 은 sessionStorage 로 신호받아
  * phone/customer 입력 서브뷰로 전환.
  */
-import { getInactivityTimeoutSeconds, getPointUseConfig, getShowStoreName } from "../features/app-config/app-config.service";
+import { getIdleThemeIndex, getInactivityTimeoutSeconds, getPointUseConfig } from "../features/app-config/app-config.service";
+import { refreshPriceDisplayTheme } from "./price-display";
 import { setConfig as setAppSessionConfig } from "../features/app-session/app-session.service";
 import { getPointBalance } from "../features/point-inquiry/point-inquiry.service";
 import { SocketGateway } from "../pos/socket-gateway";
@@ -15,14 +16,18 @@ import { showPhoneInput } from "../ui/phone-input";
 import { showMarketingAgreement } from "../ui/marketing-agreement";
 import { hideScreen } from "../ui/stage";
 import { showIdle } from "../ui/idle";
+import { lockAdmin, unlockAdmin } from "../features/admin/admin-session";
 
 const CAT_REQ_KEY = "pharm_cat_request_mode";
 
 // 대기화면 활성 여부. 입력/약관 서브뷰에선 false.
 // (pageshow/visibilitychange 시 syncIdleConfig 가 입력 화면 위에 대기화면을 다시 그리는 걸 막는다.)
 let idleActive = false;
-// 대기화면에 보일 매장명. "매장명 표시" 설정이 꺼져 있거나 못 읽으면 null.
+// 대기화면에 보일 매장명 (토스 매장 정보). 매장명은 늘 보인다 — 길게 눌러 관리자로 들어가는 자리다.
+// 아직 못 읽었으면 null.
 let idleStoreName: string | null = null;
+// 대기화면 배경 테마 (환경설정 > 테마설정). 0 = 테마A.
+let idleThemeIndex = 0;
 
 // 무동작 타임아웃 — 입력/약관 서브뷰에서만 활성. 대기화면·결과화면엔 없음.
 let stopTimeout: (() => void) | null = null;
@@ -50,6 +55,7 @@ function disarmTimeout(): void {
 
 function drawIdle(): void {
   showIdle({
+    themeIndex: idleThemeIndex,
     storeName: idleStoreName,
     onLookup: () => {
       // 번호 입력 화면이 뜨기 전 잠깐 아래 Template API 화면(#app)이 비치지 않게 숨긴다.
@@ -58,12 +64,23 @@ function drawIdle(): void {
       if (app) app.style.opacity = "0";
       navigate("/member-search");
     },
+    // 관리자 비밀번호 팝업이 떠 있는 동안은 대기 상태가 아니다 — 카트가 와도 가격표시기로 바꾸지 않는다.
+    onAdminOpenChange: (open) => { idleActive = !open; },
+    onAdminEnter: () => {
+      unlockAdmin();
+      navigate("/settings");
+    },
+    // 오른쪽 위 4번 탭 — 토스 단말 설정 화면
+    onOpenDeviceSettings: () => {
+      void sdk.app.openSetting().catch((e) => console.warn("[Home] 토스 설정 열기 실패", e));
+    },
   });
 }
 
 async function renderIdle(): Promise<void> {
   disarmTimeout(); // 대기화면은 무동작 타임아웃 없음
   hideScreen();    // 입력 · 결과 화면이 떠 있었다면 내린다 (새 화면으로 다시 띄운다)
+  lockAdmin();     // 대기화면으로 돌아오면 관리자 진입 권한을 회수한다
   idleActive = true;
   drawIdle();
 
@@ -82,23 +99,23 @@ async function syncIdleConfig(): Promise<void> {
     setAppSessionConfig({ minPoint: cfg.minPoint, isMinPointEnabled: cfg.isMinPointEnabled });
   } catch (e) { console.warn("[Home] config sync fail", e); }
 
-  const [showStoreName, storeName] = await loadStoreNameConfig();
-  idleStoreName = showStoreName && storeName ? storeName : null;
+  // 매장명을 못 읽으면 이전에 읽은 이름을 그대로 둔다.
+  const storeName = await loadStoreName();
+  if (storeName) idleStoreName = storeName;
+  idleThemeIndex = await getIdleThemeIndex();
   if (idleActive) drawIdle();
+
+  // 가격표시 테마도 미리 읽어 둔다 — 카트가 오면 기다리지 않고 맞는 테마로 그린다.
+  void refreshPriceDisplayTheme();
 }
 
-async function loadStoreNameConfig(): Promise<[boolean, string]> {
+async function loadStoreName(): Promise<string> {
   try {
-    const [showRes, merchantRes] = await Promise.allSettled([
-      getShowStoreName(),
-      sdk.app.getMerchant(),
-    ]);
-    const show = showRes.status === "fulfilled" ? showRes.value : false;
-    const name = merchantRes.status === "fulfilled" ? (merchantRes.value?.name ?? "") : "";
-    return [show, name];
+    const m = await sdk.app.getMerchant();
+    return m?.name ?? "";
   } catch (e) {
-    console.warn("[Home] store name config load fail", e);
-    return [false, ""];
+    console.warn("[Home] 매장명 조회 실패", e);
+    return "";
   }
 }
 
