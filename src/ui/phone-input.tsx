@@ -7,7 +7,7 @@
  * 서버 호출과 회신은 부르는 쪽(onSubmit)이 맡고, 결과만 돌려준다.
  *   done     — 다음 화면으로 넘어갔다 (이 화면은 그대로 둔다. 넘어간 화면이 덮는다)
  *   notFound — 입력란 아래 "등록된 회원이 없습니다" (번호를 고치면 사라진다)
- *   network  — 네트워크 팝업 (다시 시도 · 닫기)
+ *   network  — 네트워크 팝업 (닫기)
  *   server   — 서버 오류 팝업 (닫기)
  */
 import { useState } from "react";
@@ -100,10 +100,10 @@ function PhoneInputScreen(o: PhoneInputOptions) {
 
   // ── 무입력 타이머 ── 화면 어디를 눌러도 처음부터. 처리 중 · 팝업 중에는 멈춘다.
   const paused = loading || !!errorPopup || !!unavailable;
-  const { warnLeft, reset: resetTimer } = useInactivity(o.inactivitySec, paused, o.onTimeout);
+  const { warnLeft, activity, reset: resetTimer } = useInactivity(o.inactivitySec, paused, o.onTimeout);
 
   return (
-    <div className="h-full w-full" onPointerDown={resetTimer}>
+    <div className="h-full w-full" onPointerDown={activity}>
       <PhoneInputView
         header={o.header}
         phone={phone}
@@ -122,13 +122,7 @@ function PhoneInputScreen(o: PhoneInputOptions) {
         onClose={o.onClose}
       >
         {errorPopup === "network" && (
-          <NetworkErrorPopup
-            onRetry={() => {
-              setErrorPopup(null);
-              void submit();
-            }}
-            onClose={() => setErrorPopup(null)}
-          />
+          <NetworkErrorPopup onClose={() => setErrorPopup(null)} />
         )}
         {errorPopup === "server" && <ServerErrorPopup onClose={() => setErrorPopup(null)} />}
         {unavailable && (
