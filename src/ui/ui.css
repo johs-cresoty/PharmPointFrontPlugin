@@ -2,7 +2,7 @@
  * 새 디자인 화면(React, src/ui) 스타일.
  *
  * Tailwind 의 기본 초기화(preflight)는 끈다 — tailwind.config.js 참고.
- * 아직 Template API 로 그리는 화면의 토스 디자인 시스템 스타일을 건드리지 않기 위함이다.
+ * 켜면 전역 스타일이 바뀌어 아직 예전 방식으로 그리는 바코드 표시 화면이 달라진다.
  * base 는 싣는다. preflight 를 끄면 base 에는 translate · ring 등이 쓰는 CSS 변수 기본값만
  * 남는데, 이게 없으면 -translate-x-1/2 같은 클래스가 통째로 무시된다.
  */

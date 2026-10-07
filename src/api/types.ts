@@ -22,21 +22,3 @@ export type CustomerInfo = {
   customerBirth?:  string;
 };
 
-export type PointEarnResult = {
-  customerCode: string;
-  customerName: string;
-  earnPoint:    number;   // 이번 적립분
-  balancePoint: number;   // 처리 후 잔액
-};
-
-export type PointUseResult = {
-  customerCode: string;
-  customerName: string;
-  usePoint:     number;
-  balancePoint: number;
-};
-
-export type EstimateResult = {
-  sleSeq:         string;
-  estimatedPoint: number;
-};

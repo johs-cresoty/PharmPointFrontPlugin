@@ -10,14 +10,14 @@
     <link rel="stylesheet" href="https://static.toss.im/tps/others.css" />
     <link rel="stylesheet" href="/global.css" />
 
-    <!-- Toss Front SDK (window.sdk) — 뷰 함수에서 sdk.template.* 참조 -->
+    <!-- Toss Front SDK (window.sdk) — 매장 정보 · 저장소 · 시리얼/웹소켓 통신 -->
     <script src="https://cdn.tossplace.com/toss-front-sdk/v0/index.js"></script>
     <script src="/sdk.js"></script>
 
     <title>PharmPoint Plugin</title>
   </head>
   <body>
-    <!-- SDK.template.renderXxxPage 가 사용하는 컨테이너 (기존 방식과 동일) -->
+    <!-- 새 화면은 무대(src/ui/stage)가 이 위에 덮어 그린다. -->
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

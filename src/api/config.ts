@@ -134,7 +134,6 @@ export function ensureInit(): Promise<void> {
 // ─── 접근자 ─────────────────────────────────────
 
 export function currentSerialNumber():   string { return _serialNumber; }
-export function currentMerchantId():     string { return _merchantId; }
 export function currentBusinessNumber(): string { return _businessNumber; }
 
 /** TAXNO — businessNumber alias */

@@ -10,7 +10,6 @@ import { setConfig as setAppSessionConfig } from "../features/app-session/app-se
 import { getPointBalance } from "../features/point-inquiry/point-inquiry.service";
 import { SocketGateway } from "../pos/socket-gateway";
 import { navigate, onCleanup } from "../router";
-import { startInactivityTimeout } from "../features/inactivity/inactivity-timeout";
 import { showResult } from "../ui/show-result";
 import { showPhoneInput } from "../ui/phone-input";
 import { showMarketingAgreement } from "../ui/marketing-agreement";
@@ -29,27 +28,8 @@ let idleStoreName: string | null = null;
 // 대기화면 배경 테마 (환경설정 > 테마설정). 0 = 테마A.
 let idleThemeIndex = 0;
 
-// 무동작 타임아웃 — 입력/약관 서브뷰에서만 활성. 대기화면·결과화면엔 없음.
-let stopTimeout: (() => void) | null = null;
-let inactivityDuration = 30; // 설정값(미동작 시 대기 시간). renderHome 진입 시 갱신.
-
-// 입력 서브뷰 진입 시 타이머 시작(기존 것 정리 후). 타임아웃 = 뒤로가기와 동일(CAT 취소 + 대기화면).
-function armTimeout(): void {
-  disarmTimeout();
-  stopTimeout = startInactivityTimeout({
-    onTimeout: () => {
-      stopTimeout = null;
-      SocketGateway.sendCATFail("입력을 취소하였습니다.");
-      void renderIdle();
-    },
-    duration: inactivityDuration,
-  });
-}
-
-function disarmTimeout(): void {
-  stopTimeout?.();
-  stopTimeout = null;
-}
+// 무동작 타임아웃(설정값 "미동작 시 대기 시간") — 입력/약관 화면이 각자 센다. renderHome 진입 시 갱신.
+let inactivityDuration = 30;
 
 // ─── 대기화면 렌더 ─────────────────────────
 
@@ -57,13 +37,7 @@ function drawIdle(): void {
   showIdle({
     themeIndex: idleThemeIndex,
     storeName: idleStoreName,
-    onLookup: () => {
-      // 번호 입력 화면이 뜨기 전 잠깐 아래 Template API 화면(#app)이 비치지 않게 숨긴다.
-      // member-search 가 새 화면을 띄운 뒤 되돌린다.
-      const app = document.getElementById("app");
-      if (app) app.style.opacity = "0";
-      navigate("/member-search");
-    },
+    onLookup: () => { navigate("/member-search"); },
     // 관리자 비밀번호 팝업이 떠 있는 동안은 대기 상태가 아니다 — 카트가 와도 가격표시기로 바꾸지 않는다.
     onAdminOpenChange: (open) => { idleActive = !open; },
     onAdminEnter: () => {
@@ -78,7 +52,6 @@ function drawIdle(): void {
 }
 
 async function renderIdle(): Promise<void> {
-  disarmTimeout(); // 대기화면은 무동작 타임아웃 없음
   hideScreen();    // 입력 · 결과 화면이 떠 있었다면 내린다 (새 화면으로 다시 띄운다)
   lockAdmin();     // 대기화면으로 돌아오면 관리자 진입 권한을 회수한다
   idleActive = true;
@@ -173,9 +146,6 @@ function renderCustomerLookup(): void {
 // 1) 휴대폰 번호 입력 — 새 디자인 (Figma 04-5, 인라인 개인정보 동의 줄 없음)
 // 2) 약관 동의 — 새 디자인 (Figma 07-1 · 07-2, 필수 1 + 선택 1, 약관 상세는 화면 안에서)
 // 3) 입력 번호 + 선택(마케팅) 동의 여부를 캣포스로 전송 → 결과 화면("입력 완료")
-//
-// 예전에는 SDK renderAgreementPage 가 약관 상세를 외부 브라우저로 열어서
-// agreements/ 를 별도 주소(pharmpoint-agreements.pages.dev)에 올려 두었다. 이제 그 주소는 쓰지 않는다.
 
 function renderMarketingConsent(): void {
   idleActive = false;
@@ -195,11 +165,11 @@ function renderMarketingConsent(): void {
 }
 
 function renderMarketingAgreement(phone: string): void {
-  armTimeout();
   showMarketingAgreement({
+    inactivitySec: inactivityDuration,
+    onTimeout: cancelToIdle,
     onConfirm: (marketingConsent) => {
       void SocketGateway.sendCATMarketingConsent(phone, marketingConsent);
-      disarmTimeout(); // 결과 화면은 타임아웃 없음
       // 대기화면 직행 대신 결과 화면("입력 완료 / 감사합니다") 표시 후 복귀
       void showResult({ mode: "MARKETING_DONE", onDone: () => { void renderIdle(); } });
     },
@@ -248,7 +218,6 @@ export async function renderHome(): Promise<void> {
   window.addEventListener("pageshow", onPageShow);
 
   onCleanup(() => {
-    disarmTimeout();
     // 다른 경로로 떠났다 — 늦게 끝난 syncIdleConfig 가 대기화면을 다시 띄우지 않게.
     idleActive = false;
     document.removeEventListener("visibilitychange", onVisibility);

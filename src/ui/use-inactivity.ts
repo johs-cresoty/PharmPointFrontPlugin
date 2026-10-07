@@ -8,8 +8,6 @@
  * 경고 팝업이 떠 있는 동안 activity 는 아무것도 하지 않는다 — 팝업은 [계속 사용할게요] 로만 닫힌다.
  * 손가락이 닿는 순간(pointerdown) 팝업을 닫으면, 손을 뗄 때 생기는 클릭이 팝업 뒤 화면에 들어가
  * 키패드 · 버튼이 같이 눌린다.
- *
- * Template API 화면 위에서 쓰는 타이머는 features/inactivity/inactivity-timeout 이다.
  */
 import { useEffect, useRef, useState } from "react";
 

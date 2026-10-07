@@ -11,7 +11,6 @@
  *   MANUAL            → 응답 없음 (PAD 내부 UI 전용)
  */
 import { SocketGateway } from "../../pos/socket-gateway";
-import { getPointBalance, type InquiryResult } from "../point-inquiry/point-inquiry.service";
 
 export const PointUseSource = {
   TERMINAL:          "TERMINAL",
@@ -21,37 +20,6 @@ export const PointUseSource = {
 } as const;
 
 export type PointUseSourceType = typeof PointUseSource[keyof typeof PointUseSource];
-
-// ─── 유효성 검증 ─────────────────────────────
-
-export type ValidateInput = {
-  usePoint:  number;
-  balance:   number;
-  payAmount: number;
-  minPoint?: number;
-  isMinPointEnabled?: boolean;
-};
-
-export type ValidateResult =
-  | { ok: true }
-  | { ok: false; reason: string };
-
-export function validateUseAmount(input: ValidateInput): ValidateResult {
-  const { usePoint, balance, payAmount, minPoint = 0, isMinPointEnabled = false } = input;
-  if (!Number.isFinite(usePoint) || usePoint <= 0) {
-    return { ok: false, reason: "사용 포인트를 입력해주세요." };
-  }
-  if (usePoint > balance) {
-    return { ok: false, reason: "보유 포인트가 부족합니다." };
-  }
-  if (Number.isFinite(payAmount) && payAmount > 0 && usePoint > payAmount) {
-    return { ok: false, reason: "결제 금액보다 많이 사용할 수 없습니다." };
-  }
-  if (isMinPointEnabled && minPoint > 0 && usePoint < minPoint) {
-    return { ok: false, reason: `최소 ${minPoint}P 부터 사용 가능합니다.` };
-  }
-  return { ok: true };
-}
 
 // ─── 사용 결과 송신 ─────────────────────────
 
@@ -119,10 +87,6 @@ export async function cancelUse({
 }
 
 // ─── 기타 유틸 ───────────────────────────
-
-export function lookupForUse(phone: string): Promise<InquiryResult> {
-  return getPointBalance(phone);
-}
 
 export function remainingPoint(balance: number, usePoint: number): number {
   return Math.max(0, (balance || 0) - (usePoint || 0));

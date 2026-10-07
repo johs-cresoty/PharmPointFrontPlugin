@@ -2,7 +2,7 @@
 // 새 디자인 화면(React, src/ui) 전용 Tailwind 설정.
 //
 // preflight(기본 스타일 초기화)는 끈다. 켜면 전역 h1·button·img 등이 초기화되어
-// 아직 Template API 로 그리는 다른 화면(토스 디자인 시스템 스타일)이 깨진다.
+// 아직 예전 방식으로 그리는 바코드 표시 화면(토스 디자인 시스템 스타일)이 깨진다.
 // 새 화면은 필요한 스타일을 클래스로 직접 지정한다.
 //
 // 색은 네이버 플러그인(PharmPointFrontPlugin-Naver tailwind.config.js)의 ui-* 와 같다.

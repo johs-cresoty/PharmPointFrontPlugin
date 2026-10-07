@@ -5,7 +5,6 @@
  * 명명 규칙: settings_<feature>_<name> (snake_case)
  */
 export const StorageKeys = {
-  BAUD_RATE:              "settings_baud_rate",
   MIN_POINT:              "settings_min_point",
   IS_MIN_POINT_ENABLED:   "settings_is_min_point_enabled",
   RESULT_TIMEOUT_SECONDS: "settings_result_timeout_seconds",

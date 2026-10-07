@@ -43,14 +43,6 @@ export async function isMinPointEnabled(): Promise<boolean> {
   return raw === "true";
 }
 
-/** minPoint 저장. 0 → IS_MIN_POINT_ENABLED=false, >0 → true 로 자동 동기화. */
-export async function setMinPoint(minPoint: number): Promise<{ minPoint: number; isMinPointEnabled: boolean }> {
-  const n = Math.max(0, parseInt(String(minPoint), 10) || 0);
-  await writeString(StorageKeys.MIN_POINT, n);
-  await writeString(StorageKeys.IS_MIN_POINT_ENABLED, n > 0);
-  return { minPoint: n, isMinPointEnabled: n > 0 };
-}
-
 /** 일괄 조회 — AppSession.setConfig 전달용. */
 export async function getPointUseConfig(): Promise<{ minPoint: number; isMinPointEnabled: boolean }> {
   const [minPoint, enabled] = await Promise.all([getMinPoint(), isMinPointEnabled()]);

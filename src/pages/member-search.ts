@@ -44,7 +44,6 @@ async function submitInquiry(phone: string): Promise<PhoneSubmitOutcome> {
 }
 
 export async function renderMemberSearch(): Promise<void> {
-  const app = document.getElementById("app");
   const inactivitySec = await getInactivityTimeoutSeconds();
 
   showPhoneInput({
@@ -56,11 +55,5 @@ export async function renderMemberSearch(): Promise<void> {
     onTimeout: () => { navigate("/"); },
   });
 
-  // 대기화면에서 opacity 0 으로 페이드아웃 후 진입한다. 새 화면이 덮으니 아래 #app 은 원래대로.
-  if (app) app.style.opacity = "1";
-
-  onCleanup(() => {
-    hideScreen();
-    if (app) app.style.opacity = "1";
-  });
+  onCleanup(() => { hideScreen(); });
 }
