@@ -23,6 +23,7 @@ import { renderSettings } from "./pages/settings";
 import { renderPriceDisplay, saveCart, clearCart, updatePriceDisplay } from "./pages/price-display";
 import { renderBarcodeDisplay, saveBarcode, clearBarcode } from "./pages/barcode-display";
 import { log } from "./utils/log";
+import { onSettingsVisit } from "./monitoring/settings-visit";
 
 // ─── 뷰 등록 ────────────────────────────────
 
@@ -132,7 +133,8 @@ async function bootstrap(): Promise<void> {
   }
 
   // 소켓 세션 — 앱 lifecycle 하나에 1회. 라우터 이동해도 유지.
-  startAppSession({
+  // (플러그인 설정에 다녀오면 다시 시작할 수 있게 핸들러를 따로 둔다 — 아래 '세션 다시 시작')
+  const sessionHandlers: Parameters<typeof startAppSession>[0] = {
     onNavigateToSavePoint: (args) => {
       sessionStorage.setItem("pharm_earn_point_ctx", JSON.stringify({
         source: args.source, paymentType: args.paymentType, transactionData: args.transactionData,
@@ -231,7 +233,9 @@ async function bootstrap(): Promise<void> {
         log.status(`[팜포인트·장바구니] 비움 → 화면 변화 없음 — 가격표시 중이 아님(현재 ${screenName(path)})`);
       }
     },
-  });
+  };
+  startAppSession(sessionHandlers);
+  watchSessionLifecycle(sessionHandlers);
 
   // 결제 앱이 웹뷰 위를 덮으면 문서가 hidden 상태가 된다.
   // POS 가 CART_CLEAR 를 안 보내는 경우의 안전망 — 가격표시기 상태였으면 대기화면으로 복귀.
@@ -244,9 +248,64 @@ async function bootstrap(): Promise<void> {
   });
 
   startRouter();
+}
 
-  // 앱 종료 시 소켓 세션 정리 (원본 다중페이지 코드와 동일 흐름 유지)
-  window.addEventListener("beforeunload", () => { void stopAppSession(); });
+// ─── 세션 다시 시작 ────────────────────────────
+//
+// 토스 관리자 '팜포인트 → 플러그인 설정'에 들어가기만 하면 단말기 연결이 끊기고,
+// 대기화면으로 돌아와도 다시 붙지 않았다(재시작해야 풀림). 두 경우를 모두 받는다.
+//   A. 대기화면 페이지가 내려갔다가(beforeunload — 여기서 연결을 정리) 새로 뜨지 않고
+//      되살아난다(pageshow). → 되살아나거나 다시 보일 때 정리된 세션을 다시 시작한다.
+//   B. 대기화면은 살아 있고 설정만 따로 뜬다. → 설정 페이지가 남긴 열림 · 닫힘
+//      (monitoring/settings-visit)을 받아, 닫히면(또는 대기화면이 다시 보이거나 눌리면) 다시 시작한다.
+// 결제 중에는 설정에 들어갈 수 없어 결제와 겹치지 않는다.
+
+function watchSessionLifecycle(handlers: Parameters<typeof startAppSession>[0]): void {
+  let live = true;                        // 세션이 돌고 있는지
+  let stopping: Promise<void> | null = null;
+  let settingsVisited = false;            // B — 설정이 열린 뒤 아직 다시 시작하지 않음
+
+  let restarting = false;                 // pageshow · visibilitychange 가 함께 와도 한 번만
+  const restart = async (reason: string): Promise<void> => {
+    if (restarting) return;
+    restarting = true;
+    try {
+      log.status(`[팜포인트] ${reason} → 연결 다시 시작`);
+      if (stopping) await stopping;
+      if (live) await stopAppSession();
+      startAppSession(handlers);
+      live = true;
+    } finally {
+      restarting = false;
+    }
+  };
+
+  // A — 페이지가 내려갈 때 정리. 기록을 남겨야 진단에서 A 인지 B 인지 갈린다.
+  window.addEventListener("beforeunload", () => {
+    if (!live) return;
+    live = false;
+    log.status("[팜포인트] 대기화면 내려감 → 연결 정리");
+    stopping = stopAppSession().finally(() => { stopping = null; });
+  });
+
+  const onBack = (reason: string): void => {
+    if (document.visibilityState === "hidden") return;
+    if (!live) { void restart(reason); return; }                       // A
+    if (settingsVisited) { settingsVisited = false; void restart(reason); } // B
+  };
+  window.addEventListener("pageshow", () => onBack("대기화면 복귀"));
+  document.addEventListener("visibilitychange", () => onBack("대기화면 복귀"));
+  // B 에서 웹뷰가 계속 보이는 상태였다면 위 두 신호가 안 온다. 첫 터치로도 받는다.
+  window.addEventListener("pointerdown", () => { if (settingsVisited) onBack("대기화면 복귀"); }, true);
+
+  onSettingsVisit((phase) => {
+    if (phase === "open") {
+      settingsVisited = true;
+      log.status("[팜포인트] 플러그인 설정 열림 감지 — 대기화면은 살아 있음");
+      return;
+    }
+    if (settingsVisited) { settingsVisited = false; void restart("플러그인 설정 닫힘"); }
+  });
 }
 
 void bootstrap();

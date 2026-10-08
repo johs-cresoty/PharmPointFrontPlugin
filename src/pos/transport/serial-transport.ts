@@ -436,12 +436,15 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
   }
 
   async function stop(): Promise<void> {
+    // 종료 · 복귀 훅은 무조건 먼저 뗀다. 페이지가 내려가며 이미 포트를 닫아 둔 상태(suspended)에서
+    // 아래 조기 반환으로 훅이 남으면, 버려진 이 인스턴스가 복귀 때 포트를 따로 다시 열어
+    // 새 인스턴스와 리스너가 둘이 된다(같은 전문을 결제모듈로 두 번 넘긴다).
+    unregisterUnloadClose();
     // opened 가 아니어도 '열기를 시도했다면' 반드시 close 를 태운다.
     // (open 무응답 시 opened 가 false 로 남아, 예전에는 close 가 아예 호출되지 않았다 → 포트 누수)
     if (!state.opened && !state.attempted) return;
     if (state.idleTimer)  { clearTimeout(state.idleTimer);  state.idleTimer  = null; }
     link.alive = false;
-    unregisterUnloadClose();
     try { state.unlisten?.(); } catch { /* noop */ }
     state.unlisten = null;
     try {

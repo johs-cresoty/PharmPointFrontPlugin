@@ -14,6 +14,8 @@ import { StorageKeys } from "../shared/constants/storage-keys";
 import { SocketConfig } from "../pos/socket-config";
 import { onCleanup } from "../router";
 import { sendDiagnostic } from "../monitoring/sentry";
+import { markSettingsVisit } from "../monitoring/settings-visit";
+import { log } from "../utils/log";
 
 const CONTAINER_ID = "pharm-settings-container";
 const STYLE_ID     = "pharm-settings-style";
@@ -79,6 +81,12 @@ function mountContainer(): HTMLElement {
 }
 
 export async function renderPluginSettingsPage(): Promise<void> {
+  // 대기화면에 '설정 열림' 을 알린다. 이 페이지에 들어오면 대기화면 쪽 단말기 연결이 끊겨서,
+  // 대기화면이 닫힘을 알아채고 연결을 다시 시작하게 한다 (monitoring/settings-visit 참고).
+  log.status("[팜포인트] 플러그인 설정 열림");
+  markSettingsVisit("open");
+  window.addEventListener("pagehide", () => markSettingsVisit("close"), { once: true });
+
   ensureStyles();
   hideAppShell();
   mountContainer();
