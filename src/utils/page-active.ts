@@ -22,6 +22,9 @@ if (typeof window !== "undefined") {
   // 페이지가 내려가는 중이면 이후 끊김은 전부 화면 이탈에 따른 것이다.
   window.addEventListener("pagehide", () => { active = false; });
   window.addEventListener("beforeunload", () => { active = false; });
+  // 토스 설정에 다녀오면 웹뷰가 새로 뜨지 않고 살아서 돌아온다(pagehide → pageshow).
+  // 돌아온 것을 다시 앞에 뜬 것으로 쳐야 이후 끊김을 '화면 이탈' 로 잘못 넘기지 않는다.
+  window.addEventListener("pageshow", () => { active = document.visibilityState !== "hidden"; });
 }
 
 /** 화면이 앞에 떠 있으면 true. 뒤로 물러났거나 내려가는 중이면 false. */

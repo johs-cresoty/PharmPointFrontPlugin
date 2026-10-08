@@ -19,9 +19,7 @@ import { SocketConstants as C } from "../protocol/socket-constants";
 import { StorageKeys } from "../../shared/constants/storage-keys";
 import { findPiiByteRanges } from "../../utils/pii-mask";
 import { log } from "../../utils/log";
-import { reportLinkFailure } from "../../monitoring/sentry";
 import { noteTerminalRx, setLinkStatus } from "../../monitoring/link-status";
-import { isPageActive } from "../../utils/page-active";
 
 // 버퍼 상한 — TRM 시그니처를 못 찾고 과다 누적되는 상황 방어.
 const MAX_BUFFER_BYTES = 4096;
@@ -76,25 +74,16 @@ function isDigit(b: number): boolean {
 
 // ── 연동 상태 로그 ──────────────────────────────
 //
-// 단말기는 결제모듈용 폴링 전문을 수 초 간격으로 계속 보낸다. 프레임마다 hex 를 남기면
-// 똑같은 줄로 로그가 가득 차서 정작 봐야 할 팜포인트 전문이 묻힌다.
+// 단말기는 결제할 때 결제모듈 전문을 몰아 보내고, 쉬는 동안에는 아무것도 보내지 않는다.
+// (예전에는 수 초마다 폴링이 온다고 보고 '15초 무신호 = 끊김' 으로 판정했으나, 실단말에서
+//  결제가 끝나면 신호가 멎는 것이 확인돼 판정을 뗐다. 쉬는 것과 끊긴 것이 구별되지 않는다.)
 // 그래서 여기서는 두 가지만 남긴다.
-//   1) 연동이 살아있는지 — 상태가 바뀌는 시점과 일정 주기
+//   1) 신호가 들어오기 시작한 시점과, 받는 동안의 일정 주기 수신량
 //   2) 전문 내용 — 직전과 다른 전문일 때만 (같은 전문 반복은 횟수로 접음)
+// 마지막으로 받은 시각은 link-status 에 따로 적어 진단에서 결제 시각과 비교한다.
 
-/** 신호가 이 시간 동안 끊기면 연결이 끊긴 것으로 본다. */
-const LINK_IDLE_MS = 15_000;
-/** 연동이 살아있는 동안 남기는 상태 로그 주기. */
+/** 받는 동안 남기는 수신량 로그 주기. */
 const LINK_ALIVE_LOG_MS = 60_000;
-/** 신호가 이만큼 계속 끊겨 있으면 장애로 보고 Sentry 에 올린다. */
-const OUTAGE_MS = 120_000;
-/**
- * 장애를 올린 뒤 다시 올릴 수 있게 풀어주는 조건 — 신호가 이만큼 계속 들어와야 한다.
- *
- * 접촉이 나쁜 선은 잠깐 붙었다 끊기기를 반복한다. 신호 한 번 들어왔다고 바로 풀면
- * 끊길 때마다 같은 장애가 새로 올라가 한도만 쓴다. 확실히 회복된 뒤에만 푼다.
- */
-const OUTAGE_RESET_MS = 60_000;
 
 /**
  * 같은 줄이 반복되면 접어서 횟수로만 알리는 로거.
@@ -184,28 +173,25 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
     unlisten:  null as (() => void) | null,
     idleTimer: null as ReturnType<typeof setTimeout> | null,
     onUnload:  null as (() => void) | null,
+    onResume:  null as (() => void) | null,
+    // 페이지가 내려가며 포트를 닫은 상태. 같은 페이지로 돌아오면(pageshow) 다시 연다.
+    suspended: false,
     // 이번에 포트를 연 통신 속도. 이 단말은 open 응답이 오지 않아 "open OK" 줄로는 알 수 없어
     // 기동 로그에 따로 남긴다.
     baudRate:  null as number | null,
   };
 
-  // 단말기 신호 생존 상태. 전문 내용과 무관하게 '뭐라도 들어오는가'만 본다.
+  // 단말기 신호 상태. 전문 내용과 무관하게 '뭐라도 들어왔는가'만 본다.
   const link = {
     alive:        false,
     rxSinceLog:   0,
     lastAliveLog: 0,
-    watchdog:     null as ReturnType<typeof setTimeout> | null,
-    outage:       null as ReturnType<typeof setTimeout> | null,
-    // 신호가 돌아온 시각. 회복이 충분히 이어졌는지 재는 기준.
-    aliveSince:   0,
-    // 이번 장애를 이미 Sentry 에 올렸는지. 같은 장애로 거듭 올리지 않기 위한 잠금.
-    outageReported: false,
   };
 
   const logRx  = createFoldedLogger();
   const logVan = createFoldedLogger();
 
-  /** 수신이 있을 때마다 호출. 연동 시작·유지·끊김을 한 줄씩만 남긴다. */
+  /** 수신이 있을 때마다 호출. 처음 들어온 시점과 주기 수신량만 남긴다. */
   function noteSignal(): void {
     const now = Date.now();
     link.rxSinceLog += 1;
@@ -213,59 +199,18 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
 
     if (!link.alive) {
       link.alive        = true;
-      link.aliveSince   = now;
       link.lastAliveLog = now;
       link.rxSinceLog   = 1;
       setLinkStatus("결제단말기", "연결됨");
       log.status("[단말기] 신호 들어옴 — 연결 확인");
     } else if (now - link.lastAliveLog >= LINK_ALIVE_LOG_MS) {
       const sec = Math.round((now - link.lastAliveLog) / 1000);
-      log.debug(`[연동] 결제단말기 신호 정상 — 최근 ${sec}초간 ${link.rxSinceLog}건 수신`);
+      log.debug(`[연동] 결제단말기 수신 — 최근 ${sec}초간 ${link.rxSinceLog}건`);
       link.lastAliveLog = now;
       link.rxSinceLog   = 0;
     }
-
-    // 신호가 이만큼 끊기지 않고 이어졌으면 확실히 회복된 것이다. 다음에 진짜로
-    // 끊기면 다시 올릴 수 있게 잠금을 푼다. (잠깐 들어온 신호로는 풀리지 않는다)
-    if (link.outageReported && link.alive && now - link.aliveSince >= OUTAGE_RESET_MS) {
-      link.outageReported = false;
-    }
-
-    if (link.watchdog) clearTimeout(link.watchdog);
-    if (link.outage)   { clearTimeout(link.outage); link.outage = null; }
-
-    link.watchdog = setTimeout(() => {
-      link.watchdog = null;
-      link.alive    = false;
-
-      // 설정 화면으로 옮겨가거나 결제 앱이 위를 덮으면 이 웹뷰가 뒤로 물러나면서
-      // 수신이 멈춘다. 고장이 아니라 화면을 벗어난 것이므로 끊김으로 남기지 않는다.
-      // (남기면 2분 감시에 걸려 멀쩡한 단말이 장애로 보고된다)
-      if (!isPageActive()) {
-        setLinkStatus("결제단말기", "화면 이탈");
-        return;
-      }
-
-      setLinkStatus("결제단말기", "연결 끊김");
-      log.status(`[단말기] 끊김 — ${LINK_IDLE_MS / 1000}초간 신호 없음`);
-
-      // 잠깐 끊기는 것은 흔하다. 계속 끊겨 있을 때만 Sentry 로 올린다.
-      // (끊겼다 붙었다 하는 것까지 올리면 정작 봐야 할 장애가 묻힌다)
-      link.outage = setTimeout(() => {
-        link.outage = null;
-        // 2분 사이에 화면을 벗어났을 수도 있으니 보내기 직전에 다시 본다.
-        if (!isPageActive()) return;
-        // 한 장애당 한 번만 올린다. 접촉 불량으로 붙었다 끊기기를 반복해도
-        // 확실히 회복되기 전까지는 같은 내용이 거듭 올라가지 않는다.
-        if (link.outageReported) {
-          log.debug("[연동] 결제단말기 장애 지속 — 이미 보고한 건이라 다시 올리지 않음");
-          return;
-        }
-        link.outageReported = true;
-        reportLinkFailure(`결제단말기 연결 끊김이 ${OUTAGE_MS / 60_000}분 지속됨 — 시리얼 선 연결을 확인해주세요`);
-      }, OUTAGE_MS);
-    }, LINK_IDLE_MS);
   }
+
 
   function appendBuffer(chunk: Uint8Array): void {
     const merged = new Uint8Array(state.buffer.length + chunk.length);
@@ -370,21 +315,57 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
    * 페이지 종료 시 포트 반납. 종료 중이라 await 를 걸 수 없으므로 요청만 던진다.
    * (토스 공식 멀티패드 예제와 동일한 방식. WebView 는 beforeunload 가 안 뜨는 경우가 있어 pagehide 도 함께 건다.)
    */
+  /**
+   * 페이지가 내려갈 때 포트를 반납하고, 같은 페이지로 돌아오면 다시 연다.
+   *
+   * 내려갈 때 닫지 않으면 포트가 네이티브에 남아 다음 실행의 open 이 무응답이 된다.
+   * 그런데 토스 설정(우측 상단 4번 탭)에 다녀오면 이 웹뷰는 새로 뜨지 않고 살아서 돌아온다
+   * (pagehide → pageshow). 예전에는 닫기만 하고 다시 열지 않아, 돌아온 뒤로는 단말기 신호를
+   * 하나도 받지 못한 채 재시작 전까지 멈춰 있었다. 그래서 닫을 때 표시해 두고 돌아오면 다시 연다.
+   *
+   * 결제 화면이 위를 덮는 경우처럼 pagehide 없이 가려지기만 한 때는 포트를 건드리지 않는다
+   * (그 사이에도 결제 전문을 결제모듈로 넘겨야 한다).
+   */
   function registerUnloadClose(): void {
     if (typeof window === "undefined" || state.onUnload) return;
     state.onUnload = () => {
+      if (state.suspended) return;
+      state.suspended = true;
       try { state.unlisten?.(); } catch { /* noop */ }
+      state.unlisten = null;
       try { void sdk.serial.close(); } catch { /* noop */ }
+      state.opened    = false;
+      state.attempted = false;
+      state.buffer    = new Uint8Array(0);
+      if (state.idleTimer) { clearTimeout(state.idleTimer); state.idleTimer = null; }
+      link.alive = false;
+      setLinkStatus("결제단말기", "화면 이탈");
+      log.status("[팜포인트] 화면 벗어남 → 시리얼 포트 닫음");
+    };
+    state.onResume = () => {
+      if (!state.suspended || document.visibilityState === "hidden") return;
+      state.suspended = false;
+      log.status("[팜포인트] 화면 복귀 → 시리얼 포트 다시 엶");
+      setLinkStatus("결제단말기", "연결 대기 중");
+      start().catch((e) => console.error("[serial] ❌ 화면 복귀 후 다시 열기 실패", e));
     };
     window.addEventListener("beforeunload", state.onUnload);
     window.addEventListener("pagehide",     state.onUnload);
+    window.addEventListener("pageshow",     state.onResume);
+    document.addEventListener("visibilitychange", state.onResume);
   }
 
   function unregisterUnloadClose(): void {
     if (typeof window === "undefined" || !state.onUnload) return;
     window.removeEventListener("beforeunload", state.onUnload);
     window.removeEventListener("pagehide",     state.onUnload);
-    state.onUnload = null;
+    if (state.onResume) {
+      window.removeEventListener("pageshow", state.onResume);
+      document.removeEventListener("visibilitychange", state.onResume);
+    }
+    state.onUnload  = null;
+    state.onResume  = null;
+    state.suspended = false;
   }
 
   async function start(): Promise<void> {
@@ -440,7 +421,7 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
       noteSignal();
       // 시리얼로 들어온 원본 chunk — TRM/KIS 판별 전 단계. 단말기가 보낸 건 전부 여기 찍힌다.
       // 길이는 hex 와 헷갈리지 않게 괄호로 분리한다 ("5B" 를 0x5B 로 오독하는 것 방지).
-      // 반복되는 폴링 전문은 접어서 횟수로만 남긴다.
+      // 같은 전문이 연달아 오면 접어서 횟수로만 남긴다.
       logRx(`<= RX (${u8.length} bytes) ${toHexMasked(u8)}`);
       try {
         appendBuffer(u8);
@@ -459,8 +440,6 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
     // (open 무응답 시 opened 가 false 로 남아, 예전에는 close 가 아예 호출되지 않았다 → 포트 누수)
     if (!state.opened && !state.attempted) return;
     if (state.idleTimer)  { clearTimeout(state.idleTimer);  state.idleTimer  = null; }
-    if (link.watchdog)    { clearTimeout(link.watchdog);    link.watchdog    = null; }
-    if (link.outage)      { clearTimeout(link.outage);      link.outage      = null; }
     link.alive = false;
     unregisterUnloadClose();
     try { state.unlisten?.(); } catch { /* noop */ }

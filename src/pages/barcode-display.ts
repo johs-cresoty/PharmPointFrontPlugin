@@ -15,6 +15,7 @@ import { navigate, onCleanup } from "../router";
 import { buildEan13Svg, encodeEan13, EAN13_DISPLAY_WIDTH } from "../features/barcode/ean13";
 import type { BarcodeDisplayData } from "../pos/protocol/terminal-codec";
 import { log } from "../utils/log";
+import { dropScreenCover } from "../ui/stage";
 
 const STYLE_ID     = "pharm-barcode-display-style";
 const CONTAINER_ID = "pharm-barcode-display-container";
@@ -215,6 +216,7 @@ export function renderBarcodeDisplay(): void {
     return;
   }
 
+  dropScreenCover(); // 무대를 쓰지 않는 화면 — 앞 화면 가림막이 바코드를 덮지 않게 바로 걷는다
   ensureStyles();
   hideAppShell();
   const el = mountContainer();

@@ -11,6 +11,7 @@
  *   - 자체 HTML container 만 쓰고 #app 은 숨긴다.
  */
 import { StorageKeys } from "../shared/constants/storage-keys";
+import { SocketConfig } from "../pos/socket-config";
 import { onCleanup } from "../router";
 import { sendDiagnostic } from "../monitoring/sentry";
 
@@ -95,7 +96,8 @@ export async function renderPluginSettingsPage(): Promise<void> {
   } catch { document.getElementById("s-serial")!.textContent = "알 수 없음"; }
 
   const baudItem = await sdk.storage.get({ key: StorageKeys.BAUD_RATE });
-  if (baudItem.value) (document.getElementById("s-baud") as HTMLSelectElement).value = baudItem.value;
+  // 저장값이 없으면 포트는 기본값(SocketConfig.baudRate)으로 열린다. 화면도 그 값을 보여줘야 실제와 같다.
+  (document.getElementById("s-baud") as HTMLSelectElement).value = baudItem.value || String(SocketConfig.baudRate);
 
   (document.getElementById("s-baud") as HTMLSelectElement).addEventListener("change", async (e) => {
     const value = (e.target as HTMLSelectElement).value;
