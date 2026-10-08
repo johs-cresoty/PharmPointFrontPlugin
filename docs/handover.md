@@ -1,599 +1,273 @@
-# PharmPointFrontPlugin 인수인계 문서
+# PharmPoint 토스 플러그인 인수인계 문서
 
-> 본 문서는 PharmPoint 토스 플레이스 프론트 플러그인 프로젝트의 전반적인 구조, 핵심 흐름, API 명세, 운영 정보를 정리한 인수인계 자료입니다.
+> 저장소: `PharmPointFrontPlugin` (GitHub `johs-cresoty/PharmPointFrontPlugin`)
+> 기준 시점: 2026-10-08 · 커밋 `2507dea`
 
 ---
 
-## 1. 프로젝트 개요
+## 1. 개요
 
 | 항목 | 내용 |
 |---|---|
-| **프로젝트명** | PharmPointFrontPlugin (cresoty-pharmpoint) |
-| **목적** | 약국용 POS 단말기(태블릿) 에서 동작하는 토스 플레이스 프론트 플러그인. 약사가 결제 시점에 고객 포인트를 적립/사용/조회 |
-| **배포 형태** | Toss Place 플랫폼이 호스팅하는 정적 웹 (HTML/CSS/JS) |
-| **배포 URL** | `https://cresoty-pharmpoint.plugin.tossplace.com` |
-| **타겟 환경** | Toss 플러그인 WebView (Android 기반) |
-| **연동 시스템** | (1) Catpos POS PC → WebSocket / (2) 외부 카드 단말기 → Serial / (3) 매장 운영 백엔드 (catpos.co.kr) → HTTPS API |
-| **자매 프로젝트** | `PharmPoint` (안드로이드 네이티브 앱) — 동일 비즈니스 로직의 안드로이드 구현. 본 플러그인이 이를 미러링 |
+| 무엇 | 토스플레이스 프론트(약국 고객용 단말기)에서 돌아가는 팜포인트 플러그인. 고객이 휴대폰 번호로 포인트를 조회·적립·사용한다 |
+| 플러그인 ID | `cresoty-pharmpoint` |
+| 실행 주소 | 라이브 `https://cresoty-pharmpoint.plugin.tossplace.com` · 개발 `https://cresoty-pharmpoint.plugin-dev.tossplace.com` |
+| 연동 대상 | ① 캣포스(약국 POS PC) — 웹소켓 ② 결제 단말기(CAT) — 시리얼 ③ 팜포인트 서버(`app-api.catpos.co.kr`) — HTTPS |
+| 자매 프로젝트 | `PharmPointFrontPlugin-Naver` (네이버 커넥트용, 같은 화면 사용) · `PharmPoint` (안드로이드 원본 앱. 업무 로직의 원형) |
+| 디자인 | Figma「커넥트_고객화면_디자인」 (`v0WOZg8LbT1tT30e7Rjlb3`) 페이지 "최종디자인" |
 
-### 1.1 안드로이드와의 관계
-모든 비즈니스 로직은 안드로이드 PharmPoint 앱의 대응 클래스를 미러링했습니다. 코드 곳곳에 `Android: <대응 클래스명>` 주석이 있어 두 프로젝트 간 매핑이 명확합니다.
-
-예: `PharmHttpClient` ↔ Android `CryptoInterceptor`, `PointTransactionService` ↔ Android `CatposCloudApi.estimatePoint/upsertCustomerPoint`
+### 화면 방식 — Template API 대신 직접 그린 화면
+토스 가이드는 Template API(`sdk.template.*`)로 화면을 만들라고 하지만, 팜포인트는 **토스 검수 예외 승인**을 받고 Figma 디자인을 React 로 직접 그린다.
+- 화면은 네이버 플러그인과 **같은 파일**을 쓴다 (아래 4장).
+- 지금 Template API 는 설정 페이지(settings.html)의 토스트(`sdk.template.openToast`) 한 곳만 쓴다.
 
 ---
 
-## 2. 기술 스택
+## 2. 개발 환경
 
-| 영역 | 기술 |
+| 항목 | 내용 |
 |---|---|
-| 언어 | Vanilla JavaScript (ES2020+), HTML, CSS |
-| 빌드 | 별도 빌드 도구 없음 — `bundle.js` 가 수동 단일 번들 (`src/**/*.js` concat) |
-| UI 프레임워크 | 없음 — Toss Front SDK 의 템플릿 API + 일부 커스텀 HTML 오버레이 |
-| Toss SDK | `https://cdn.tossplace.com/toss-front-sdk/v0/index.js` (전역 `sdk` 객체) |
-| WebSocket 서버 | Toss SDK 의 `sdk.websocket.start` 사용 (플러그인이 서버 역할) |
-| Serial 통신 | Toss SDK 의 `sdk.serial.*` 사용 (RS-232 카드 단말기) |
-| 저장소 | `sdk.storage` (key-value) |
+| 언어 | TypeScript (흐름·연동) + React 19 (화면, `src/ui`) |
+| 빌드 | Vite 8 · Tailwind 3 (preflight 끔) |
+| 폰트 | Noto Sans KR (`@fontsource-variable/noto-sans-kr`, 앱과 함께 배포) |
+| SDK | Toss Front SDK (`cdn.tossplace.com/toss-front-sdk/v0`) — 전역 `sdk` |
+| 오류 수집 | Sentry (`@sentry/browser`, DSN 은 `src/monitoring/sentry.ts`) |
+
+```bash
+npm install
+npm run dev            # 개발 서버 (브라우저 확인용. SDK mock 으로 화면만 동작)
+npm run build          # 배포본 (상세 로그 꺼짐)
+npm run build:verbose  # 배포본 + 상세 로그 (실단말 문제 추적용)
+npm run preview        # 빌드 결과 확인 (settings.html 확인은 이걸로)
+```
+
+- 개발 서버는 `/api` 를 vite proxy 로 개발 서버(`dev-app-api`)에 넘긴다(CORS 우회).
+- `dist` 는 하위 폴더 없이 평평하게 나온다 (토스 개발자센터가 하위 폴더를 지원하지 않음).
+- `global.css` · `sdk.js` 는 빌드마다 `?v=` 가 붙어 단말이 새로 받는다.
 
 ---
 
 ## 3. 폴더 구조
 
 ```
-PharmPointFrontPlugin/
-├── *.html                  # 화면별 페이지 (entry HTML)
-│   ├── index.html               — 시작 페이지 (실사용 X, 진입 redirect)
-│   ├── onboarding.html          — 약국 초기 등록 (사업자번호 등)
-│   ├── home.html                — 대기 화면 (idle)
-│   ├── member-search.html       — 포인트 조회 (휴대폰 입력)
-│   ├── point-earn-flow.html     — 포인트 적립 흐름 (휴대폰 입력 + 적립 확정)
-│   ├── point-use-flow.html      — 포인트 사용 흐름 (휴대폰 입력 → 포인트 입력)
-│   ├── point-use-with-customer-flow.html  — 포인트 사용 (캣포스가 고객 식별)
-│   ├── result.html              — 조회 결과 화면
-│   ├── settings.html            — 환경설정 (최소 포인트, 결과 화면 시간 등)
-│   ├── order.html / payment.html — (사용 안 됨, 향후 확장용)
-│
-├── bundle.js               # 빌드 산출물 (모든 src/*.js 통합)
-├── sdk.js                  # 토스 SDK 글로벌 alias 설정
-├── global.css              # 공통 스타일
-│
-├── docs/
-│   ├── handover.md              — 이 문서
-│   └── websocket-protocol.md    — WebSocket 통신 명세
-│
-└── src/                    # 소스 코드 (편집 시 bundle.js 도 재생성/수동 갱신 필요)
-    ├── features/                # 도메인별 서비스
-    │   ├── app-config/                — 환경설정 read/write
-    │   ├── app-session/               — 소켓 이벤트 → 화면 라우팅
-    │   ├── point-earn/                — 적립 orchestration
-    │   ├── point-estimate/            — 적립 예상 계산
-    │   ├── point-inquiry/             — 고객/잔액 조회
-    │   ├── point-settings/            — 적립 설정 조회
-    │   ├── point-transaction/         — 적립/사용 확정 (upsert)
-    │   ├── point-use/                 — 사용 orchestration
-    │   ├── result-page/               — 결과 화면 (renderResultPage 래퍼)
-    │   └── transaction-parser/        — 소켓 raw 필드 → TransactionData 변환
-    └── shared/
-        ├── constants/
-        │   ├── api-config.js          — baseUrl, taxNo, cmptrName 등
-        │   └── storage-keys.js        — sdk.storage 키 모음
-        ├── http/
-        │   └── http-client.js         — 암호화 인터셉터 포함 fetch 래퍼
-        ├── socket/
-        │   ├── protocol/
-        │   │   ├── socket-constants.js  — 명령 상수 (CAT/TRM)
-        │   │   ├── catpos-codec.js      — CAT JSON 인/디코더
-        │   │   └── terminal-codec.js    — 단말기 바이너리 프레임 인/디코더
-        │   ├── transport/
-        │   │   ├── websocket-transport.js  — sdk.websocket 래퍼
-        │   │   └── serial-transport.js     — sdk.serial 래퍼
-        │   ├── socket-config.js         — 포트, 보레이트 등
-        │   ├── socket-events.js         — 도메인 이벤트 이름
-        │   └── socket-gateway.js        — 두 채널 통합 dispatcher
-        └── utils/
-            └── crypt.js                 — Cresoty 자체 암호화 (^ 구분자)
-```
-
-### 3.1 빌드 / 배포
-- **현재 빌드 도구 없음**. `src/*.js` 수정 시 `bundle.js` 의 해당 섹션을 *수동으로* 동기화해야 함.
-- `bundle.js` 는 IIFE 들의 단순 concat. 파일별 경계는 `/* ===== src/.../file.js ===== */` 주석으로 구분.
-- 향후 esbuild / rollup 도입 권장 — 누락된 동기화 방지.
-- 배포는 Toss Place 콘솔에 zip 업로드 (개발자센터 → 내 애플리케이션 → 배포).
-
----
-
-## 4. 핵심 비즈니스 흐름
-
-### 4.1 화면 전환 구조
-
-```
-home.html (대기)
-  ├─ "포인트 조회" 버튼 → member-search.html → result.html
-  ├─ Catpos WebSocket 명령 수신
-  │   ├─ CONNECT             → 자동 ACK
-  │   ├─ PHONE_INPUT_REQ     → home.html 내에서 renderPhoneInput (오버레이)
-  │   ├─ CUSTOMER_REGISTER_REQ → renderCustomerLookup (오버레이)
-  │   ├─ EARN_SINGLE/MULTI_REQ → point-earn-flow.html
-  │   ├─ USE_POINT_REQ        → point-use-flow.html
-  │   └─ USE_POINT_WITH_CUSTOMER_REQ → point-use-with-customer-flow.html
-  └─ Serial 단말기 전문 수신
-      ├─ 001 (단일 결제)  → point-earn-flow.html
-      ├─ 002 (복합 결제)  → point-earn-flow.html
-      └─ 003 (사용 요청)  → point-use-flow.html
-```
-
-### 4.2 포인트 적립 (적립 화면 진입 후)
-
-```
-1. point-earn-flow.html 로드
-2. sessionStorage 의 ctx 로드 (trnDate, appNum, method, amount, payments 등)
-3. POST /api/point/estimate  ← 적립 예상 P + SLE_SEQ 수령 (병렬, async)
-   * CODE 8888 / 9303 → 1s, 2s 백오프로 최대 3회 재시도
-4. 사용자 휴대폰 11자리 + 동의 → 확인 클릭
-5. POST /api/terminals/customers/code  ← 적립 확정
-   * sleSeq 있으면 BySleSeq, 없으면 결제 정보 기반
-6. 응답 OK → ResultPageService.showEarnSuccess (renderResultPage)
-7. 결과 화면 타이머 종료 → home.html 로 복귀
-```
-
-### 4.3 포인트 사용
-
-`point-use-flow.html`:
-```
-1. ctx 로드 (payAmount 등)
-2. 휴대폰 11자리 입력 + 확인
-3. GET /api/terminals/customers       ← 회원 등록 여부 (LIST 빔/안빔)
-   * 비어있으면 "등록된 회원이 없습니다." 토스트, 재시도 가능
-4. GET /api/terminals/customers/code  ← 상세 (보유 포인트, 코드, 이름)
-5. 잔액 검증 (최소 포인트, balance > 0)
-   * 부족 시 ResultPageService.showInsufficientPoint + sendCATFail (CAT 소스만)
-6. 사용 포인트 입력 화면 (number 키패드)
-   * 입력 < minPoint → 사용하기 버튼 비활성
-   * 입력 > 보유 → 자동으로 보유값으로 보정
-7. 사용하기 클릭 → SocketGateway 로 source 별 응답 송신
-   * TERMINAL → 단말기 004 전문
-   * CAT      → CATPOS USE_POINT_ACK
-8. ResultPageService.showUseSuccess
-```
-
-`point-use-with-customer-flow.html`: 위 1~4 단계 스킵 (캣포스가 balance/payAmount 이미 전달). 5단계부터 동일.
-
-### 4.4 포인트 조회
-
-`member-search.html`:
-```
-1. 휴대폰 11자리 입력 + 확인
-2. GET /api/terminals/customers  ← 등록 여부
-   * 비어있으면 "등록된 회원이 없습니다." 토스트
-3. GET /api/terminals/customers/code  ← 상세
-4. result.html 로 이동 (sessionStorage 로 전달)
-5. renderResultPage 로 표시
+src/
+├── main.ts                 부팅 · 라우트 등록 · 소켓 이벤트 → 화면 연결
+├── router.ts               hash 라우터 (#/경로)
+├── api/                    서버 통신 (axios · 인증 · 토큰 · 관리자 비밀번호)
+├── features/               업무 로직
+│   ├── admin/              관리자 진입 잠금 (admin-session)
+│   ├── app-config/         단말 저장소(sdk.storage) 설정 읽기·쓰기
+│   ├── app-session/        소켓 이벤트 → 화면 이동 연결
+│   ├── point-inquiry/      회원 · 잔액 조회
+│   ├── point-earn/         적립 (예상 → 확정, 실패 시 재시도)
+│   ├── point-transaction/  적립 예상 · 확정 API
+│   ├── point-use/          사용 결과 회신 · 취소 회신
+│   ├── point-settings/     적립 사용 여부 조회
+│   ├── result-page/        결과 화면 이동
+│   └── barcode/            EAN-13 바코드 생성
+├── pages/                  라우트별 흐름 (화면 띄우기 + 회신)
+├── pos/                    캣포스 · 단말기 프로토콜과 전송 계층
+│   ├── protocol/           전문 상수 · 코덱 · 파서
+│   └── transport/          websocket · serial · van
+├── monitoring/             Sentry · 연동 상태 기록
+├── shared/constants/       저장소 키
+├── ui/                     새 디자인 화면 (React) — 네이버와 공용 파일 포함
+└── utils/                  로그 · 개인정보 가림 · 화면 활성 여부
+public/                     settings.html · sdk.js · global.css · 이미지 · 아이콘
+docs/                       이 문서 · websocket-protocol.md
+*.md (루트)                 단말기 · 가격표시기 연동 명세
 ```
 
 ---
 
-## 5. API 명세 (catpos.co.kr 백엔드)
+## 4. 화면 구조
 
-### 5.1 공통 사항
+### 4-1. 무대(stage)
+- Figma 는 네이버 단말 해상도 **534×854** 로 그려져 있다. 토스 단말은 **400×640** 으로 비율(5:8)이 같다.
+- `src/ui/stage.tsx` 가 534×854 크기로 그린 화면을 통째로 줄여 #app 위에 덮는다. 그래서 화면 코드는 Figma 수치(px)를 그대로 쓴다.
+- 한 번에 한 화면만 띄운다. 주소(hash)가 바뀌면 무대를 내린다.
 
-| 항목 | 값 |
+### 4-2. 네이버와 같이 쓰는 파일 — 고칠 때 두 저장소를 함께 고친다
+
+| 파일 | 화면 (Figma) |
 |---|---|
-| **Base URL (DEV)** | `http://dev.catpos.co.kr` |
-| **Base URL (PROD)** | `http://catpos.co.kr:13922` |
-| **선택 기준** | `location.hostname` 이 localhost 면 DEV, 그 외 PROD |
-| **응답 포맷** | `{ MSG, CODE, DATA, DTL }` 표준 envelope (Catpos 표준) |
-| **인증** | 별도 토큰 없음 — TAXNO + 단말 식별자(CMPTR_NAME) 기반 |
-| **암호화** | 모든 요청 파라미터/본문 값은 [CresotyCrypt](../src/shared/utils/crypt.js) 로 암호화 후 전송. 응답에 `^` 포함된 문자열은 자동 복호화 |
-| **공통 응답 코드** | `0000` 성공 / `8888`,`9303` 일시적 (estimate 재시도) / 그 외 비즈니스 에러 |
+| `IdleView.tsx` · `main-themes.ts` | 대기화면 (01-1~5) |
+| `PriceDisplayView.tsx` | 가격표시기 (02-1 · 02-2) |
+| `PhoneInputView.tsx` · `Keypad.tsx` | 번호 입력 (04-1~7, 05-1) |
+| `Popups.tsx` | 안내 팝업 4종 (05-2) |
+| `UsePointView.tsx` | 사용 포인트 입력 (06-1 · 06-2) |
+| `MarketingAgreementView.tsx` · `AgreementDetailView.tsx` · `agreement-content.ts` | 약관 동의 · 상세 (07-1~3) |
+| `AdminPasswordView.tsx` | 관리자 비밀번호 (09-1 · 09-2) |
+| `settings/*` | 환경설정 (09-3 · 09-5 · 09-6 · 09-7) |
 
-### 5.2 공통 파라미터 (대부분 요청에 포함)
+결과 화면(`ResultScreen.tsx`)은 토스 쪽에 따로 옮겨 둔 사본이다.
 
-| 필드 | 의미 | 출처 |
+토스 전용 파일은 공용 화면을 띄우고 입력·타이머를 관리한다: `idle.tsx` · `phone-input.tsx` · `use-point-input.tsx` · `marketing-agreement.tsx` · `show-result.tsx` · `use-inactivity.ts`.
+
+### 4-3. 스타일 주의
+- Tailwind preflight(전역 초기화)를 껐다. 켜면 토스 디자인 시스템 CSS 로 그리는 예전 화면(바코드 표시 · settings.html)이 깨진다.
+- 대신 `src/ui/ui.css` 가 무대 안에서만 필요한 초기화(테두리 · 입력칸 · 글꼴)를 한다. 공용 파일이 네이버(preflight 켬)와 같은 모양으로 보이게 하기 위함이다.
+- 토스 CSS 영향으로 `aspect-ratio` 가 눌린 적이 있어 테마 카드 높이는 px 로 직접 준다.
+
+---
+
+## 5. 라우트
+
+| 경로 | 화면 | 진입 |
 |---|---|---|
-| `TAXNO` | 약국 사업자번호 (10자리) | `sdk.app.getMerchant().businessNumber` |
-| `CMPTR_NAME` | 단말 식별자 (고정 "TossFront_Plugin") | `ApiConfig.cmptrName` |
-| `POS_VER` | 단말 앱 버전 (현재 "1.0.0") | `ApiConfig.posVer` |
-| `POS_GUBN` | POS 구분 ("CP" = Catpos Plugin) | `ApiConfig.posGubn` |
-| `CST_HP` | 고객 휴대폰 11자리 (하이픈 없음) | 사용자 입력 |
-
-### 5.3 엔드포인트 목록
-
-| # | 메서드 | 경로 | 용도 | 사용 서비스 |
-|---|---|---|---|---|
-| 1 | GET | `/api/terminals/customers` | 회원 등록 여부 + 기본 정보 (LIST) | `PointInquiryService.getCustomer` |
-| 2 | GET | `/api/terminals/customers/code` | 회원 상세 + 잔액 (INFO) | `PointInquiryService.getPointBalance` |
-| 3 | POST | `/api/terminals/customers/code` | 포인트 적립 확정 (upsert) | `PointTransactionService.commit*` |
-| 4 | POST | `/api/point/estimate` | 적립 예상 포인트 + SLE_SEQ 발급 | `PointTransactionService.estimatePoint` |
-| 5 | GET | `/api/point/settings` | 적립 기능 사용 여부 | `PointSettingsService.getPointSaveSetting` |
-| 6 | GET | `/api/point/payment-settings` | 최소 사용 포인트 (BASE_AMT) | `PointSettingsService.getPointAmountSetting` |
+| `#/` | 대기화면 · 캣포스 요청용 입력(번호 요청 · 고객 코드 요청 · 마케팅 동의) | 기본 |
+| `#/member-search` | 포인트 조회 (번호 입력 → 결과) | 대기화면 [포인트 조회] |
+| `#/point-earn-flow` | 포인트 적립 | 캣포스 EARN_* · 단말기 001/002 |
+| `#/point-use-flow` | 포인트 사용 (번호 입력 → 포인트 입력) | 캣포스 USE_POINT_REQ · 단말기 003 |
+| `#/point-use-with-customer-flow` | 포인트 사용 (고객 지정, 번호 입력 없음) | 캣포스 USE_POINT_WITH_CUSTOMER_REQ |
+| `#/result` | 결과 화면 (조회 · 적립 · 사용 · 포인트 부족) | 각 흐름 완료 |
+| `#/price-display` | 가격표시기 | 캣포스 CART_UPDATE (대기 중일 때만) |
+| `#/barcode-display` | 바코드 표시 | 단말기 005 |
+| `#/settings` | 환경설정 (Figma) — 관리자 진입 후만 | 매장명 2초 길게 누르기 + 비밀번호 |
+| `settings.html` | 플러그인 설정 (Toss SN · 시리얼 속도 · 진단 보내기) | 토스 관리자 '플러그인 설정' |
 
 ---
 
-### 5.4 엔드포인트 상세
+## 6. 외부 연동
 
-#### ① GET `/api/terminals/customers`
-> 휴대폰 번호로 등록된 회원 존재 여부 확인. LIST 비어있으면 미등록.
+### 6-1. 캣포스 — 웹소켓
+- 플러그인이 **서버**, 캣포스가 클라이언트. 포트 **52391**, 경로 `/`, serverId `pharm-pad` (`src/pos/socket-config.ts`).
+- 메시지는 JSON 텍스트 `{"command":"...","data":{...}}`. 자세한 필드는 `docs/websocket-protocol.md`, 가격표시기는 `catpos-cart-display-spec.md`.
+- 회신은 마지막으로 메시지를 보낸 연결로 간다.
 
-**Query Params**
-```
-TAXNO, CST_HP, CMPTR_NAME, POS_VER
-```
+| 수신 command | 하는 일 | 회신 |
+|---|---|---|
+| CONNECT | 접속 확인 | CONNECT_ACK |
+| PHONE_INPUT_REQ | 번호 입력 | PHONE_INPUT_ACK (번호) |
+| CUSTOMER_REGISTER_REQ | 번호 입력 → 회원 조회 | CUSTOMER_REGISTER_ACK (번호 · 고객코드) |
+| MARKETING_CONSENT_REQ | 번호 입력 → 약관 동의 | MARKETING_CONSENT_ACK (번호 · 마케팅 동의 여부) |
+| EARN_SINGLE_REQ · EARN_MULTI_REQ | 적립 (단건 · 복합) | 성공 시 회신 없음 |
+| USE_POINT_REQ | 사용 (번호 입력부터) | USE_POINT_ACK (고객코드 · 잔액 · 사용) |
+| USE_POINT_WITH_CUSTOMER_REQ | 사용 (고객 지정) | USE_POINT_WITH_CUSTOMER_ACK (사용) |
+| CART_UPDATE · CART_CLEAR | 가격표시기 갱신 · 종료 | 없음 |
+| CANCEL | 대기화면 복귀 | 없음 |
 
-**Response**
-```json
-{
-  "MSG":  "",
-  "CODE": "0000",
-  "DATA": {
-    "LIST": [
-      {
-        "CST_CODE": "2106000002",
-        "CST_HP":   "01012345678",
-        "CST_NAME": "홍길동",
-        "CST_GNDR": "M",
-        "CST_BRTH": "19900101",
-        "PNT_AMT":  "12000"
-      }
-    ]
-  },
-  "DTL":  ""
-}
-```
+취소 · 시간 초과 · 포인트 부족은 `FAIL` (사유 문구) 로 회신한다. 캣포스(Delphi)는 줄바꿈을 `\r\n` 으로만 인식한다.
 
-- `LIST` 가 빈 배열 = 미등록 회원 (에러 아님)
-- 동일 번호로 여러 명 등록 가능 — 플러그인은 `LIST[0]` 만 사용
+### 6-2. 결제 단말기(CAT) — 시리얼
+- 9600bps · 8N1. 명세: `terminal-serial-protocol-spec.md` · `terminal-005-999-spec.md`.
+- 한 시리얼 포트로 팜포인트 전문과 결제(KIS VAN) 전문이 같이 들어온다. **`"XX"` 마커 + `"TRM"` 플래그**가 있는 전문만 팜포인트가 처리하고, 나머지는 `sdk.van.write` 로 VAN 모듈에 넘긴다.
+- 유효 전문을 받으면 ACK(`06 06 06`)를 자동 회신한다.
 
----
+| 수신 CMD | 하는 일 | 회신 |
+|---|---|---|
+| 001 · 002 | 적립 (단건 · 복합) | 성공 시 없음 (화면에서 완료) / 실패·취소 010 (INIT) |
+| 003 | 사용 | 완료 004 (번호 · 잔액 · 사용) / 취소·시간 초과 010 (INIT) |
+| 005 | 바코드(QR · EAN-13) 표시 | 006 |
+| 999 | 단말기가 띄운 화면 닫기 | ACK 만 |
 
-#### ② GET `/api/terminals/customers/code`
-> 고객 코드 + 상세 정보 + 잔액 조회 (최근 방문 고객 1명).
-
-**Query Params**
-```
-TAXNO, CST_HP, CMPTR_NAME, POS_VER, POS_GUBN
-```
-
-**Response**
-```json
-{
-  "MSG":  "",
-  "CODE": "0000",
-  "DATA": {
-    "INFO": [
-      {
-        "CST_CODE": "2106000002",
-        "CST_HP":   "01012345678",
-        "CST_NAME": "홍길동",
-        "CST_GNDR": "M",
-        "CST_BRTH": "19900101",
-        "PNT_BLC":  "12000"
-      }
-    ]
-  },
-  "DTL":  ""
-}
-```
-
-- `INFO[0]` 한 건만 사용
-- `PNT_BLC` (잔액) 사용 — `PNT_AMT` 와 다름에 주의
-
----
-
-#### ③ POST `/api/terminals/customers/code` (적립 확정)
-> 3가지 호출 형태가 있음. 본문 구성에 따라 서버가 적립 방식 선택.
-
-**Body — (a) SLE_SEQ 기반**
-```json
-{
-  "TAXNO":      "1234567890",
-  "CMPTR_NAME": "TossFront_Plugin",
-  "POS_VER":    "1.0.0",
-  "CST_HP":     "01012345678",
-  "TRN_DATE":   "20260616",
-  "SLE_SEQ":    "704208459"
-}
-```
-
-**Body — (b) 단건 결제 정보 기반**
-```json
-{
-  "TAXNO":      "...",
-  "CMPTR_NAME": "...",
-  "POS_VER":    "...",
-  "CST_HP":     "...",
-  "TRN_DATE":   "20260616",
-  "TRN_GUBN":   "M",
-  "TRN_TIME":   "143000",
-  "TRN_AMT":    "10000",
-  "APP_NUM":    "00012345"
-}
-```
-
-**Body — (c) 복합 결제 정보 기반**
-```json
-{
-  "TAXNO":      "...",
-  "CMPTR_NAME": "...",
-  "POS_VER":    "...",
-  "CST_HP":     "...",
-  "TRN_DATE":   "20260616",
-  "TRN_AMT":    "10000",
-  "ADD": [
-    { "TRN_GUBN": "M", "TRN_DATE": "20260616", "TRN_TIME": "143000", "APP_NUM": "00012345", "TRN_AMT": "7000" },
-    { "TRN_GUBN": "C", "TRN_DATE": "20260616", "TRN_TIME": "143000", "APP_NUM": "00012346", "TRN_AMT": "3000" }
-  ]
-}
-```
-
-**Response (성공)**
-```json
-{
-  "MSG":  "",
-  "CODE": "0000",
-  "DATA": {
-    "INFO": [{
-      "SLE_SEQ":  "704208459",
-      "CST_CODE": "2106000002",
-      "CST_HP":   "01012345678",
-      "CST_NAME": "홍길동",
-      "PNT_AMT":  "100",
-      "PNT_BLC":  "12100"
-    }]
-  },
-  "DTL":  ""
-}
-```
-
-- `PNT_AMT`: 이번 거래로 적립된 포인트
-- `PNT_BLC`: 적립 후 총 잔액
-
-**Fallback 동작**: 플러그인은 sleSeq 로 commit 실패 시 자동으로 (b)/(c) 방식으로 1회 재시도 (`commitWithFallback`).
-
----
-
-#### ④ POST `/api/point/estimate` (적립 예상)
-> 결제 정보로 적립 예상 포인트 및 SLE_SEQ 발급.
-
-**Body — 단건**
-```json
-{
-  "TAXNO":      "...",
-  "CMPTR_NAME": "...",
-  "POS_VER":    "...",
-  "TRN_DATE":   "20260616",
-  "TRN_GUBN":   "M",
-  "TRN_AMT":    "10000",
-  "APP_NUM":    "00012345"
-}
-```
-
-**Body — 복합**
-```json
-{
-  "TAXNO":      "...",
-  "CMPTR_NAME": "...",
-  "POS_VER":    "...",
-  "ADD": [
-    { "TRN_GUBN": "M", "TRN_DATE": "20260616", "TRN_TIME": "143000", "APP_NUM": "00012345", "TRN_AMT": "7000" },
-    { "TRN_GUBN": "C", "TRN_DATE": "20260616", "TRN_TIME": "143000", "APP_NUM": "00012346", "TRN_AMT": "3000" }
-  ]
-}
-```
-
-**Response**
-```json
-{
-  "MSG":  "",
-  "CODE": "0000",
-  "DATA": {
-    "INFO": [{
-      "SLE_SEQ": "704208459",
-      "PNT_AMT": "100"
-    }]
-  },
-  "DTL":  ""
-}
-```
-
-**재시도 정책** (`PointTransactionService.estimatePoint`)
-- `CODE` 가 `8888` 또는 `9303` 이면 일시 실패 — 1초 후 1회, 2초 후 1회 추가 시도 (총 3회)
-- 3회 모두 실패 시 graceful: `{ success: true, data: null, retried: true }` → SLE_SEQ 없이 적립 단계 진행 (b)/(c) 폴백)
-
----
-
-#### ⑤ GET `/api/point/settings`
-> 매장의 적립 기능 사용 여부 확인.
-
-**Query Params**
-```
-TAXNO, CMPTR_NAME, POS_VER, POS_GUBN
-```
-
-**Response**
-```json
-{
-  "MSG": "", "CODE": "0000",
-  "DATA": { "INFO": [{ "PNT_GUBN": "USE" }] },
-  "DTL": ""
-}
-```
-
-- `PNT_GUBN === "NON"` 이면 적립 비활성 → 플러그인은 적립 흐름 자동 차단
-- 그 외 ("USE" 등) → 적립 활성
-
----
-
-#### ⑥ GET `/api/point/payment-settings`
-> 최소 사용 포인트 (가장 작은 BASE_AMT) 조회.
-
-**Query Params**
-```
-TAXNO, CMPTR_NAME, POS_VER, POS_GUBN
-```
-
-**Response**
-```json
-{
-  "MSG": "", "CODE": "0000",
-  "DATA": {
-    "INFO": [
-      { "BASE_AMT": "1000" },
-      { "BASE_AMT": "5000" }
-    ]
-  },
-  "DTL": ""
-}
-```
-
-- 여러 BASE_AMT 중 `Math.min` 값을 사용 (위 예시 → 1000)
-- 응답이 비어있으면 기본값 `20000` 사용
-
----
-
-## 6. WebSocket 프로토콜 (Catpos PC ↔ 플러그인)
-
-별도 문서 [docs/websocket-protocol.md](./websocket-protocol.md) 참조.
-
-요약:
-- 플러그인이 **서버 역할** (port 52391, path `/`)
-- 메시지 봉투: `{ "command": "...", "data": {...} }`
-- 송수신 명령 10여 개 (`EARN_SINGLE_REQ`, `USE_POINT_ACK` 등)
-
----
-
-## 7. Serial 통신 (외부 카드 단말기)
-
-| 항목 | 값 |
-|---|---|
-| 방식 | RS-232 (Toss SDK `sdk.serial.*`) |
-| 보레이트 | 9600 |
-| 프레임 | STX(0x02) + 본문 + ETX(0x03) + LRC |
-| 인코딩 | EUC-KR |
-| FS 구분자 | 0x1C |
-| ACK / NAK | 0x06 / 0x15 |
-| 명령 | 001 (적립 단일) / 002 (적립 복합) / 003 (사용 요청) / 004 (사용 응답) / 010 (취소) |
-
-상세는 [terminal-codec.js](../src/shared/socket/protocol/terminal-codec.js) 참고.
-
-**CAT 세션 활성 중에는 단말기 신호 전부 차단** (Catpos PC 가 진행 중일 때 단말기와 충돌 방지).
-
----
-
-## 8. 토스 Front SDK 사용 요약
+### 6-3. 팜포인트 서버
+API 명세는 노션 "PharmPoint 토스 플러그인 API 명세" 참고. 요약:
 
 | API | 용도 |
 |---|---|
-| `sdk.template.renderIdlePage` | 대기 화면 (home.html) |
-| `sdk.template.renderInputPage({ type: 'phone' })` | 휴대폰 번호 입력 |
-| `sdk.template.renderInputPage({ type: 'number' })` | 사용 포인트 입력 |
-| `sdk.template.renderResultPage` | 적립/사용/조회 결과 화면 |
-| `sdk.template.openToast` | 토스트 메시지 (**커스텀 AppToast 로 override 됨** — `bundle.js` 끝부분 참조) |
-| `sdk.app.getMerchant` | 사업자번호 + 매장명 조회 |
-| `sdk.storage.get/set` | 환경설정 저장 |
-| `sdk.websocket.start/close/send` | Catpos PC 통신 |
-| `sdk.serial.*` | 단말기 통신 |
-| `sdk.payment.requestPayment` | (현재 미사용, 향후 결제 직접 연동 대비) |
+| `POST /api/v1/point/auth/enroll` · `/token` | 토큰 발급 · 재발급 (사업자번호 + 단말 시리얼) |
+| `GET /api/terminals/customers` | 회원 조회 |
+| `GET /api/terminals/customers/code` | 잔액 조회 |
+| `POST /api/point/estimate` | 적립 예상 (8888 · 9303 이면 최대 3회) |
+| `POST /api/terminals/customers/code` | 적립 확정 (매출순번 / 단건 / 복합) |
+| `GET /api/point/settings` | 적립 사용 여부 |
+| `POST /api/v1/plugin/settings/verify-password` | 관리자 비밀번호 (`platform: "TOSS"`) |
 
-### 8.1 토스 docs 접근 불가 시
-`docs.tossplace.com` 가 403 으로 막혀있을 때가 있음. 그땐 CDN 번들에서 직접 시그니처 확인:
-```bash
-curl -sL "https://cdn.tossplace.com/toss-front-sdk/v0/index.js" -o /tmp/toss-sdk.js
-grep -oE 'renderXxxPage=function\([^}]{0,500}' /tmp/toss-sdk.js
+- 운영/개발 서버는 `src/api/config.ts` 의 `API_TARGET` 하나로 정한다. **배포본은 반드시 `"prod"`.**
+- 포인트 사용은 API 없이 캣포스 · 단말기 회신만 한다.
+
+---
+
+## 7. 설정
+
+### 7-1. 두 가지 설정 화면
+
+| 화면 | 들어가는 법 | 항목 |
+|---|---|---|
+| 환경설정 (Figma) | 대기화면 **매장명 2초 길게 누르기** → 관리자 비밀번호(서버 대조) | 포인트설정 · 테마설정(대기화면 배경 A~E · 가격표시 라이트/다크) · 화면대기 |
+| 플러그인 설정 (settings.html) | 토스 단말 설정 → 플러그인 → 플러그인 설정 | Toss SN · 시리얼 통신 속도 · 진단 보내기 |
+
+- 환경설정은 비밀번호를 거치지 않고 주소(`#/settings`)로 들어오면 대기화면으로 돌려보낸다. 대기화면으로 돌아오면 다시 잠근다.
+- 대기화면 **오른쪽 위 4번 연달아 탭** → 토스 단말 설정(`sdk.app.openSetting`). 토스 기본 대기화면의 숨은 동작(우측 상단 5회 + 7055)을 우리 화면이 덮어서 만든 대체 입구다.
+- 매장명은 대기화면에 항상 보인다(관리자 진입 자리라 숨김 설정 없음).
+
+### 7-2. 단말 저장소(`sdk.storage`) 키 — `src/shared/constants/storage-keys.ts`
+
+| 키 | 기본값 | 내용 |
+|---|---|---|
+| `settings_min_point` | 1000 | 최소 사용 포인트 |
+| `settings_is_min_point_enabled` | true | 최소 사용 포인트 사용 여부 |
+| `settings_result_timeout_seconds` | 5 | 완료 화면 자동 꺼짐(초) |
+| `settings_inactivity_timeout_seconds` | 30 | 입력 화면 미동작 자동 꺼짐(초) |
+| `settings_idle_theme_index` | 0 | 대기화면 배경 테마 (0~4) |
+| `settings_price_display_theme` | LIGHT | 가격표시 테마 |
+| `settings_baud_rate` | - | 시리얼 통신 속도 |
+
+네이버와 달리 설정을 서버(`/api/v1/plugin/settings`)에 저장하지 않는다.
+
+---
+
+## 8. 화면 동작 규칙 (자주 묻는 것)
+
+- **무입력 타이머:** 입력 화면에서 설정 시간 동안 조작이 없으면 마지막 5초에 "대기화면으로 이동합니다" 팝업. 팝업이 떠 있는 동안은 **[계속 사용할게요]로만** 닫힌다(손가락이 닿는 순간 닫으면 뒤 화면이 같이 눌리던 문제 때문).
+- **가격표시기:** 대기 상태에서만 띄운다. 고객이 번호 입력 · 결과 · 관리자 팝업 중이면 카트가 와도 화면을 바꾸지 않는다(로그에 "고객이 조작 중인 화면이라 그대로 둠").
+- **결제금액 < 최소 사용 포인트:** 결과 화면 대신 입력 화면 위 "포인트를 사용할 수 없어요" 팝업 + 캣포스 FAIL.
+- **오류 팝업:** 연결 실패 → "네트워크에 연결할 수 없어요", 서버 오류 → "일시적인 서버 오류가 발생했어요". 둘 다 [닫기] 하나. 와이파이 재연결은 플러그인에서 할 수 없다.
+- **팝업 아이콘**은 코드 안(data URI)에 들어 있어 오프라인에서도 보인다.
+
+---
+
+## 9. 로그 · 진단
+
+| 수단 | 내용 |
+|---|---|
+| `log.status` | 운영 빌드에서도 남는 연동 상태 줄. 줄머리 `[캣포스]` `[단말기]` `[팜포인트·적립]` 등이 그 일을 한 주체다 |
+| `log.debug` · `log.info` | 개발 서버 · `build:verbose` 에서만 출력 (전문 덤프 · HTTP 본문) |
+| 실시간 로그 | 개발 모드 단말 화면 위쪽의 `IP:PORT` 를 같은 네트워크 PC 브라우저로 연다 |
+| Sentry | JS 오류 + 연동 끊김 자동 보고. 태그 `merchant`(사업자번호) · `device`(시리얼) 로 검색 |
+| 진단 보내기 | settings.html 의 [진단 보내기] → 최근 연동 기록 · 현재 연결 상태를 Sentry 로 1건 전송 (1분에 1번) |
+
+개인정보는 로그에서 가린다: 휴대폰 번호 뒤 4자리만, 고객명 · 비밀번호 · 토큰은 `***`.
+
+---
+
+## 10. 빌드 · 배포
+
+1. `git status` 로 커밋 안 된 변경이 없는지 확인
+2. `src/api/config.ts` 의 `API_TARGET` 이 `"prod"` 인지 확인
+3. 빌드 · 압축
+   ```powershell
+   cd C:\Users\USER\WebProjects\PharmPointFrontPlugin; npm run build; if ($LASTEXITCODE -eq 0) { Compress-Archive -Path .\dist\* -DestinationPath ..\PharmPointFrontPlugin.zip -Force }
+   ```
+4. 토스 개발자센터 → 내 플러그인 → 개발 배포(테스트 단말 최대 5대, 검수 없음) 또는 라이브 배포(검수 월·목)
+5. 단말 반영
+   - 대기화면 오른쪽 위 4번 탭 → 설정 → `7055` → 플러그인 → 업데이트, 또는 **단말 재시작**
+   - 라이브는 새벽 3~4시 프론트 재기동 때 자동 반영
+   - 테스트 단말은 개발 배포만 받는다. 라이브 확인은 테스트 단말 등록 해제 + 재온보딩(설정 → 7055 → 매장명 → 로그아웃)
+
+---
+
+## 11. 테스트 방법
+
+| 대상 | 방법 |
+|---|---|
+| 캣포스 요청 (예: 마케팅 동의) | 같은 네트워크 PC 에서 단말로 웹소켓 접속해 대신 보낸다 (아래) |
+| 화면만 빨리 | `npm run dev` 후 콘솔: `sessionStorage.setItem("pharm_cat_request_mode","CAT_MARKETING_CONSENT"); location.reload();` |
+| 네트워크 오류 팝업 | 번호 입력 화면에서 단말 와이파이를 끄고 [확인] |
+| 서버 오류 팝업 | 개발 서버 콘솔에서 회원 조회 주소를 망가뜨린 뒤 [확인] (요청 URL 의 `/api/terminals/customers` 를 없는 경로로 바꾸는 XHR 패치) |
+| settings.html | `npm run build` → `npm run preview` → `/settings.html` |
+
+```powershell
+node -e "const ws=new WebSocket('ws://단말IP:52391/');ws.onopen=()=>{ws.send(JSON.stringify({command:'MARKETING_CONSENT_REQ',data:{}}));console.log('요청 보냄')};ws.onmessage=e=>console.log('받음:',e.data)"
 ```
 
-### 8.2 커스텀 UI 패턴
-입력 화면 등 일부 화면에선 토스 SDK 의 풀스크린 템플릿 위에 **`position: fixed` 오버레이** 로 커스텀 헤더/푸터를 덮는 구조 사용. 자세히는 `point-earn-flow.html` 의 `.overlay-top` / `.overlay-bottom` CSS 와 `body > #app { padding-top/-bottom }` 참고.
-
 ---
 
-## 9. 환경설정 (sdk.storage 키)
+## 12. 알아둘 것 · 남은 일
 
-| 키 | 타입 | 기본값 | 의미 |
-|---|---|---|---|
-| `min_point` | number | 0 | 최소 사용 포인트 |
-| `is_min_point_enabled` | boolean | false | 최소 포인트 활성 여부 (min_point > 0 일 때 자동 true) |
-| `show_store_name` | boolean | true | 대기 화면에 매장명 노출 |
-| `result_timeout_seconds` | number (3~10) | 5 | 결과 화면 자동 닫힘 시간 |
-
-수정 화면: `settings.html`. read/write: [AppConfigService](../src/features/app-config/app-config.service.js).
-
----
-
-## 10. 알려진 이슈 / 진행 중
-
-### 10.1 ⚠️ CORS 미설정 (서버 측 작업 필요)
-플러그인 도메인 (`https://cresoty-pharmpoint.plugin.tossplace.com`) 에서 catpos 백엔드 POST API 호출 시 CORS preflight 가 차단됨. **백엔드에 다음 설정 요청 필요**:
-
-```
-Access-Control-Allow-Origin: https://cresoty-pharmpoint.plugin.tossplace.com
-Access-Control-Allow-Methods: GET, POST, OPTIONS
-Access-Control-Allow-Headers: Content-Type, Authorization
-+ OPTIONS 메서드 200 응답
-```
-
-GET 은 simple request 라 preflight 없이 통과 (mixed content 경고만), POST 는 차단됨.
-- 영향 받는 endpoint: `/api/terminals/customers/code` (POST), `/api/point/estimate`
-- DEV / PROD 양 환경 동일 적용 필요
-
-### 10.2 ⚠️ HTTP 통신 (Mixed Content)
-catpos 백엔드가 HTTPS 미지원 → 플러그인(HTTPS) 에서 HTTP 호출 시 Mixed Content 경고. 토스 WebView 는 현재 허용하지만 향후 차단될 수 있으니 **catpos HTTPS 화** 권장.
-
-### 10.3 빌드 도구 부재
-`src/*.js` 수정 시 `bundle.js` 수동 동기화 필요. 누락 사고 방지를 위해 esbuild/rollup 도입 권장.
-
----
-
-## 11. 개발 / 테스트 팁
-
-### 11.1 로컬 테스트
-- 페이지를 `localhost`/`127.0.0.1` 로 띄우면 `ApiConfig.baseUrl` 이 자동으로 DEV URL 반환
-- 실제 플러그인 환경 (Toss WebView) 흐름 테스트는 토스 콘솔에 zip 업로드 + 단말기 연결 필요
-
-### 11.2 임시로 DEV 강제하기
-`src/shared/constants/api-config.js` 의 `baseUrl` getter 를 `BASE_URL_DEV` 반환으로 일시 변경 (현재 코드에서 반드시 원복할 것).
-
-### 11.3 로그 확인
-- 플러그인 콘솔: 토스 개발자 도구 → 로그 뷰어 (보통 `192.168.x.x:9900/logs` 같은 로컬 stream)
-- WebSocket 송수신은 `[WS]` 태그로 모두 콘솔에 출력
-- HTTP 응답 에러는 `console.warn` / `console.error` 로 출력
-
-### 11.4 sessionStorage 키 (페이지 간 데이터 전달)
-| 키 | 사용처 |
-|---|---|
-| `pharm_lookup_result` | 조회 결과 → result.html |
-| `pharm_earn_point_ctx` | 적립 흐름 컨텍스트 → point-earn-flow.html |
-| `pharm_use_point_ctx` | 사용 흐름 컨텍스트 → point-use-flow.html |
-| `pharm_use_point_with_customer_ctx` | 고객 정보 포함 사용 → point-use-with-customer-flow.html |
-
----
-
-## 12. 자주 묻는 질문
-
-### Q. `bundle.js` 와 `src/*.js` 의 관계?
-A. `bundle.js` 는 `src/*.js` 의 모든 IIFE 를 단순 concat 한 결과물. 빌드 도구가 없어서 **현재는 수동 동기화**. 페이지(HTML)는 `bundle.js` 만 로드함. 따라서 `src` 수정 후 반드시 `bundle.js` 의 해당 섹션도 같이 수정.
-
-### Q. 응답에 `^` 기호가 들어간 이상한 문자열은?
-A. Catpos 의 자체 암호화 (CresotyCrypt) 결과물. `^` 는 length-prefix 구분자. [`PharmHttpClient`](../src/shared/http/http-client.js) 가 자동 복호화하므로 일반 코드에선 신경 쓸 필요 없음.
-
-### Q. 안드로이드 앱과 비즈니스 로직이 달라지면?
-A. 안드로이드 앱이 원본(spec)이고 본 플러그인은 미러링. 새 변경은 안드로이드 먼저 반영 후 본 프로젝트에 포팅하는 흐름이 자연스러움. 코드 주석의 `Android: <클래스명>` 가 매핑 단서.
-
----
-
-## 13. 관련 문서 / 링크
-
-| 자료 | 경로 |
-|---|---|
-| WebSocket 프로토콜 명세 | [docs/websocket-protocol.md](./websocket-protocol.md) |
-| 코딩 컨벤션 / 아키텍처 원칙 | [CLAUDE.md](../CLAUDE.md) |
-| Toss Place 개발자센터 | https://docs.tossplace.com (인증 필요 — 403 자주 발생) |
-| Toss Front SDK 번들 | https://cdn.tossplace.com/toss-front-sdk/v0/index.js |
-| 안드로이드 미러링 원본 | (사내 git) `PharmPoint` 프로젝트 |
-
----
-
-## 14. 변경 이력
-
-| 날짜 | 변경 |
-|---|---|
-| 2026-06 | 초기 인수인계 문서 작성 — 현재 구현 기준 정리 |
+- **Template API 예외:** 토스 검수 예외 승인으로 직접 그린 화면을 쓴다. 새 화면을 추가할 때도 같은 방식이지만, 검수 기준이 바뀌면 토스와 다시 확인해야 한다.
+- **바코드 표시 화면**은 Figma 디자인이 없어 예전 HTML 화면 그대로다. 새 디자인이 나오면 공용 화면으로 옮기고, 그때 토스 디자인 시스템 CSS(`index.html` 의 tds · tps 링크)를 걷어낼 수 있다.
+- **관리자 비밀번호**는 플랫폼(TOSS / NAVER)별 공통 고정값이다. 약국별 비밀번호는 장기 검토 과제.
+- 네이버 커넥트의 CAT 릴레이 Base64(`==`) 거부 문제는 네이버 쪽만 해당한다. 토스는 시리얼을 직접 써서 영향이 없다.
+- 루트의 명세 문서(`terminal-*.md` · `catpos-cart-display-spec.md`)와 `docs/websocket-protocol.md` 는 외부(단말기 · 캣포스 개발사)에 전달한 명세다. 프로토콜을 바꾸면 함께 고쳐 다시 전달한다. `websocket-protocol.md` 안의 소스 경로는 예전 구조 기준이다.
