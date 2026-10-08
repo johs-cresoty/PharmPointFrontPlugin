@@ -24,6 +24,7 @@ import { renderPriceDisplay, saveCart, clearCart, updatePriceDisplay } from "./p
 import { renderBarcodeDisplay, saveBarcode, clearBarcode } from "./pages/barcode-display";
 import { log } from "./utils/log";
 import { onSettingsVisit } from "./monitoring/settings-visit";
+import { startScreenWatch } from "./monitoring/screen-watch";
 
 // ─── 뷰 등록 ────────────────────────────────
 
@@ -236,6 +237,7 @@ async function bootstrap(): Promise<void> {
   };
   startAppSession(sessionHandlers);
   watchSessionLifecycle(sessionHandlers);
+  startScreenWatch(); // 결제 직후 토스 화면이 끼어드는 현상 진단 기록 (monitoring/screen-watch)
 
   // 결제 앱이 웹뷰 위를 덮으면 문서가 hidden 상태가 된다.
   // POS 가 CART_CLEAR 를 안 보내는 경우의 안전망 — 가격표시기 상태였으면 대기화면으로 복귀.
