@@ -16,10 +16,11 @@
  */
 import { SocketConfig as cfg } from "../socket-config";
 import { SocketConstants as C } from "../protocol/socket-constants";
+import { StorageKeys } from "../../shared/constants/storage-keys";
 import { findPiiByteRanges } from "../../utils/pii-mask";
 import { log } from "../../utils/log";
 import { reportLinkFailure } from "../../monitoring/sentry";
-import { setLinkStatus } from "../../monitoring/link-status";
+import { noteTerminalRx, setLinkStatus } from "../../monitoring/link-status";
 import { isPageActive } from "../../utils/page-active";
 
 // 버퍼 상한 — TRM 시그니처를 못 찾고 과다 누적되는 상황 방어.
@@ -40,6 +41,8 @@ export type SerialTransport = {
   start(): Promise<void>;
   stop():  Promise<void>;
   send(bytes: Uint8Array | number[]): Promise<void>;
+  /** 마지막으로 포트를 연 통신 속도. 아직 열지 않았으면 null. */
+  baudRate(): number | null;
 };
 
 // 바이트 로그용 — hex / 가독 텍스트 변환 (게이트웨이 브릿지 로그에서 재사용).
@@ -127,6 +130,26 @@ function withTimeout(p: Promise<unknown>, ms: number, label: string): Promise<vo
 }
 
 /**
+ * 포트를 열 통신 속도. 토스 관리자 '플러그인 설정'에서 고른 값(sdk.storage)이 있으면 그 값,
+ * 없거나 읽지 못하면 기본값(SocketConfig.baudRate).
+ * 저장소가 응답하지 않으면 포트를 못 여는 일이 없도록 2초 뒤 기본값으로 연다.
+ */
+async function loadBaudRate(): Promise<number> {
+  let saved: unknown;
+  try {
+    const item = await Promise.race([
+      sdk.storage.get({ key: StorageKeys.BAUD_RATE }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
+    ]);
+    saved = item?.value;
+  } catch (e) {
+    console.warn("[serial] 통신 속도 설정 읽기 실패 — 기본값 사용", e);
+  }
+  const n = Number(saved);
+  return Number.isInteger(n) && n > 0 ? n : cfg.baudRate;
+}
+
+/**
  * TRM 프레임 시그니처(STX + "XX" + 숫자4) 위치를 찾는다.
  *   index    : 시그니처(또는 그 접두)의 시작 STX 위치. 없으면 -1.
  *   complete : 시그니처 7바이트(STX+XX+숫자4)를 버퍼가 다 담고 있으면 true,
@@ -161,6 +184,9 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
     unlisten:  null as (() => void) | null,
     idleTimer: null as ReturnType<typeof setTimeout> | null,
     onUnload:  null as (() => void) | null,
+    // 이번에 포트를 연 통신 속도. 이 단말은 open 응답이 오지 않아 "open OK" 줄로는 알 수 없어
+    // 기동 로그에 따로 남긴다.
+    baudRate:  null as number | null,
   };
 
   // 단말기 신호 생존 상태. 전문 내용과 무관하게 '뭐라도 들어오는가'만 본다.
@@ -183,6 +209,7 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
   function noteSignal(): void {
     const now = Date.now();
     link.rxSinceLog += 1;
+    noteTerminalRx();
 
     if (!link.alive) {
       link.alive        = true;
@@ -382,19 +409,21 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
     //    실단말에서 open 의 Promise 가 해소되지 않는 사례가 있어(resolve/reject 둘 다 없음),
     //    await 하면 아래 listen 등록 줄까지 도달하지 못해 수신이 영영 불가능해진다.
     //    포트 자체는 열려 있을 수 있으므로 응답을 기다리지 말고 리스너부터 건다.
+    const baudRate = await loadBaudRate();
+    state.baudRate = baudRate;
     const openWatchdog = setTimeout(() => {
-      log.debug("[serial] open 응답 대기 생략 — 리스너로 수신 진행");
+      log.debug(`[serial] open 응답 대기 생략 — 리스너로 수신 진행 (baudRate=${baudRate})`);
     }, 5000);
     try {
       // 결과는 로그로만 관찰한다(진행을 막지 않음). 동기 throw 도 잡는다.
-      Promise.resolve(sdk.serial.open({ baudRate: cfg.baudRate, intercept: true }))
+      Promise.resolve(sdk.serial.open({ baudRate, intercept: true }))
         .then(() => {
           clearTimeout(openWatchdog);
-          log.info(`[serial] open OK — baudRate=${cfg.baudRate}, intercept=true`);
+          log.info(`[serial] open OK — baudRate=${baudRate}, intercept=true`);
         })
         .catch((e) => {
           clearTimeout(openWatchdog);
-          console.error(`[serial] ❌ open 실패 — baudRate=${cfg.baudRate}, intercept=true`, e);
+          console.error(`[serial] ❌ open 실패 — baudRate=${baudRate}, intercept=true`, e);
         });
     } catch (e) {
       clearTimeout(openWatchdog);
@@ -462,5 +491,5 @@ export function createSerialTransport({ onFrame, onVanForward, onError }: Serial
     }
   }
 
-  return { start, stop, send };
+  return { start, stop, send, baudRate: () => state.baudRate };
 }

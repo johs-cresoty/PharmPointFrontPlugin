@@ -28,6 +28,7 @@ function ensureStyles(): void {
     #${CONTAINER_ID} .setting-row { display:flex; justify-content:space-between; align-items:center; background:#fff; padding:16px; border-radius:12px; margin-bottom:12px; }
     #${CONTAINER_ID} .setting-label { font-size:15px; color:#333; }
     #${CONTAINER_ID} .setting-value { font-size:15px; color:#666; }
+    #${CONTAINER_ID} .setting-hint { display:block; font-size:13px; color:#888; margin-top:4px; }
     #${CONTAINER_ID} select { padding:8px 12px; border:1px solid #ddd; border-radius:8px; font-size:14px; background:#fff; cursor:pointer; }
   `;
   document.head.appendChild(s);
@@ -57,7 +58,10 @@ function mountContainer(): HTMLElement {
       <span class="setting-value" id="s-serial">-</span>
     </div>
     <div class="setting-row">
-      <span class="setting-label">시리얼 통신 속도</span>
+      <div>
+        <span class="setting-label">시리얼 통신 속도</span>
+        <span class="setting-hint">플러그인이 다시 시작되면 적용돼요.<br>(단말기 재시작 또는 플러그인 업데이트)</span>
+      </div>
       <select id="s-baud">
         <option value="9600">9600</option>
         <option value="115200">115200</option>
@@ -95,7 +99,15 @@ export async function renderPluginSettingsPage(): Promise<void> {
 
   (document.getElementById("s-baud") as HTMLSelectElement).addEventListener("change", async (e) => {
     const value = (e.target as HTMLSelectElement).value;
-    await sdk.storage.set({ key: StorageKeys.BAUD_RATE, value });
+    // 포트는 플러그인이 시작될 때 한 번 열리고, 이 화면은 고객 화면과 따로 떠서 열린 포트를 다시 열 수 없다.
+    // 그래서 바꾼 값은 플러그인이 다음에 시작될 때(단말기 재시작 · 플러그인 업데이트)부터 적용된다.
+    try {
+      await sdk.storage.set({ key: StorageKeys.BAUD_RATE, value });
+      sdk.template.openToast({ message: "저장했어요. 단말기 재시작 또는 플러그인 업데이트 후 적용돼요.", icon: "success" });
+    } catch (err) {
+      console.warn("[PluginSettings] 통신 속도 저장 실패", err);
+      sdk.template.openToast({ message: "저장하지 못했어요. 다시 골라주세요.", icon: "error" });
+    }
   });
 
   // 진단 보내기 — 약국에서 "안 된다"는 문의가 왔을 때 쓴다.

@@ -10,6 +10,7 @@
  */
 import { SocketGateway } from "../../pos/socket-gateway";
 import { SocketEvent } from "../../pos/socket-events";
+import { log } from "../../utils/log";
 import {
   parseCatComplex,
   parseCatSingle,
@@ -97,6 +98,21 @@ export async function refreshConfig(): Promise<void> {
   }
 }
 
+/**
+ * 단말기 적립 요청(001 · 002)을 화면 없이 넘길지. 넘길 때는 이유를 남긴다.
+ *
+ * 조건은 안드로이드 앱과 같다. 예전에는 조용히 넘겨서, 진단에는 '받았는데 반응이 없다' 로만 보였다.
+ */
+function skipTerminalEarn(isAfterUse: boolean, otc: number): boolean {
+  const reason =
+    isAfterUse     ? "포인트를 쓰고 결제한 건이라 적립 대상 아님(포인트사용여부 1)" :
+    !isSaveEnabled ? "매장 적립 설정이 꺼져 있음" :
+    otc === 0      ? "적립 대상 금액(OTC)이 0원" :
+    null;
+  if (reason) log.status(`[팜포인트·적립] 화면 안 띄움 — ${reason}`);
+  return reason !== null;
+}
+
 // ─── 이벤트 등록 ─────────────────────────────
 
 export function start(handlers: AppSessionHandlers = {}): void {
@@ -118,7 +134,7 @@ export function start(handlers: AppSessionHandlers = {}): void {
     const { fields } = payload as TerminalEventPayload;
     const isAfterUse = (fields[7] ?? "0") === "1";
     const otc = parseInt(fields[5] ?? "0", 10) || 0;
-    if (isAfterUse || !isSaveEnabled || otc === 0) return;
+    if (skipTerminalEarn(isAfterUse, otc)) return;
 
     const td = parseTerminalSingle(fields);
     handlers.onNavigateToSavePoint?.({
@@ -130,7 +146,7 @@ export function start(handlers: AppSessionHandlers = {}): void {
     const { fields } = payload as TerminalEventPayload;
     const isAfterUse = (fields[7] ?? "0") === "1";
     const otc = parseInt(fields[5] ?? "0", 10) || 0;
-    if (isAfterUse || !isSaveEnabled || otc === 0) return;
+    if (skipTerminalEarn(isAfterUse, otc)) return;
 
     const td = parseTerminalComplex(fields);
     handlers.onNavigateToSavePoint?.({

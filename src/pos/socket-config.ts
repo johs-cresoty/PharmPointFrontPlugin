@@ -3,7 +3,7 @@
  *
  * port       : 웹소켓 서버 리스닝 포트 (PharmPoint Android = 52391)
  * wsServerId : sdk.websocket.start 의 serverId
- * baudRate   : 시리얼 포트 통신 속도
+ * baudRate   : 시리얼 포트 기본 통신 속도. 토스 관리자 '플러그인 설정'에서 고른 값이 있으면 그 값을 쓴다
  * wsJsonWrap : true → 전문을 JSON.stringify 로 래핑 (레거시 호환용).
  *              현재는 JSON 프로토콜을 원문 그대로 송수신하므로 false.
  */

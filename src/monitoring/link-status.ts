@@ -99,3 +99,78 @@ export function setLinkStatus(which: LinkChannel, phase: LinkPhase): void {
 export function formatLinkEntry(entry: LinkEntry): string {
   return entry.since === "-" ? entry.phase : `${entry.phase} (${entry.since}부터)`;
 }
+
+// ── 결제단말기 마지막 수신 ─────────────────────────
+//
+// "단말기에서 결제했는데 반응이 없다" 문의의 첫 질문은 '단말기가 보냈나, 팜포인트가 못 받았나' 다.
+// 플러그인이 볼 수 있는 것은 토스 장비가 넘겨준 데이터뿐이라, 두 시각을 따로 적어둔다.
+//   lastRxAt  : 무엇이든 받은 마지막 시각. 단말기는 결제모듈용 폴링을 수 초마다 보내므로
+//               결제 시각 뒤에도 이 값이 갱신돼 있으면 시리얼 경로는 살아 있던 것이다.
+//   lastTrmAt : 팜포인트 전문(001 · 003 등)을 받은 마지막 시각과 그 종류.
+// 결제 시각과 비교하면 단말기 쪽인지 팜포인트 쪽인지가 갈린다.
+//
+// 폴링이 수 초마다 와서, 받을 때마다 저장하면 저장소를 쉴 새 없이 쓴다.
+// 무엇이든 받은 시각은 5초에 한 번만 쓴다(판정에는 이 정도 오차면 충분하다).
+
+const RX_KEY = "pharmpoint_terminal_rx";
+const RX_WRITE_INTERVAL_MS = 5_000;
+
+export type TerminalRx = {
+  lastRxAt:     number | null;
+  lastTrmAt:    number | null;
+  lastTrmLabel: string | null;
+};
+
+const EMPTY_RX: TerminalRx = { lastRxAt: null, lastTrmAt: null, lastTrmLabel: null };
+
+let lastRxWrite = 0;
+
+export function readTerminalRx(): TerminalRx {
+  try {
+    const raw = localStorage.getItem(RX_KEY);
+    if (!raw) return { ...EMPTY_RX };
+    const v = JSON.parse(raw) as Partial<TerminalRx>;
+    return {
+      lastRxAt:     typeof v.lastRxAt  === "number" ? v.lastRxAt  : null,
+      lastTrmAt:    typeof v.lastTrmAt === "number" ? v.lastTrmAt : null,
+      lastTrmLabel: typeof v.lastTrmLabel === "string" ? v.lastTrmLabel : null,
+    };
+  } catch {
+    return { ...EMPTY_RX };
+  }
+}
+
+function writeTerminalRx(next: TerminalRx): void {
+  try { localStorage.setItem(RX_KEY, JSON.stringify(next)); }
+  catch { /* 저장이 막힌 환경이면 보관만 포기한다. 동작에는 영향 없다. */ }
+}
+
+/** 시리얼로 무엇이든 받았을 때. */
+export function noteTerminalRx(): void {
+  const now = Date.now();
+  if (now - lastRxWrite < RX_WRITE_INTERVAL_MS) return;
+  lastRxWrite = now;
+  writeTerminalRx({ ...readTerminalRx(), lastRxAt: now });
+}
+
+/** 팜포인트 전문을 받았을 때. label 은 "포인트 적립 요청(001)" 처럼 사람이 읽는 이름. */
+export function noteTerminalFrame(label: string): void {
+  const now = Date.now();
+  lastRxWrite = now;
+  writeTerminalRx({ lastRxAt: now, lastTrmAt: now, lastTrmLabel: label });
+}
+
+/** 진단에 실을 시각 — "10/08 10:37:17 (3분 12초 전)". 날짜가 바뀌어도 헷갈리지 않게 월/일을 붙인다. */
+export function formatAgo(at: number | null, now = Date.now()): string {
+  if (at === null) return "(받은 적 없음)";
+  const d = new Date(at);
+  const p = (n: number): string => String(n).padStart(2, "0");
+  const stamp = `${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  const sec = Math.max(0, Math.round((now - at) / 1000));
+  const ago =
+    sec < 60    ? `${sec}초 전` :
+    sec < 3600  ? `${Math.floor(sec / 60)}분 ${sec % 60}초 전` :
+    sec < 86400 ? `${Math.floor(sec / 3600)}시간 ${Math.floor((sec % 3600) / 60)}분 전` :
+                  `${Math.floor(sec / 86400)}일 전`;
+  return `${stamp} (${ago})`;
+}

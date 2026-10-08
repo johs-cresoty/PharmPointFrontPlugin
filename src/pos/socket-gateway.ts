@@ -23,7 +23,7 @@ import { createVanTransport, type VanTransport } from "./transport/van-transport
 import { maskPiiText } from "../utils/pii-mask";
 import { log } from "../utils/log";
 import { reportLinkFailure } from "../monitoring/sentry";
-import { setLinkStatus } from "../monitoring/link-status";
+import { noteTerminalFrame, setLinkStatus } from "../monitoring/link-status";
 import { catCommandLabel, terminalCommandLabel } from "./protocol/command-names";
 import { SocketConfig } from "./socket-config";
 
@@ -170,13 +170,21 @@ function create() {
       log.status("[단말기] 팜포인트 전문 도착 — 통신 확인됨");
     }
 
+    // 받은 사실과 종류는 처리 여부와 무관하게 먼저 적는다. 진단에서 '단말기가 보냈나' 를 가르는 기준이다.
+    const parsed = TerminalCodec.parse(frame);
+    const label  = parsed ? terminalCommandLabel(parsed.cmd) : "팜포인트 전문";
+    noteTerminalFrame(label);
+
+    // 받고도 처리하지 않는 경우는 운영 빌드에서도 이유를 남긴다.
+    // 남기지 않으면 진단에서 '받았는데 반응이 없다' 로만 보여 단말기 탓인지 팜포인트 탓인지 모른다.
     if (catSessionActive) {
+      log.status(`[단말기] ${label} 보냄 → 무시 — 캣포스 결제 진행 중(결제 시작 후 결제 종료 전)`);
       log.debug(`[SocketGateway] CAT 세션 활성 — 단말기 전문 무시 (${toHexMasked(frame)})`);
       return; // CAT 세션 활성 중에는 단말기 신호 차단 (Android 동일)
     }
 
-    const parsed = TerminalCodec.parse(frame);
     if (!parsed) {
+      log.status("[단말기] 팜포인트 전문 보냄 → 처리 못 함 — 전문 형식이 명세와 다름(플래그가 TRM 아님 등) · 확인 필요: 단말기");
       console.warn(`[SocketGateway] TRM 파싱 실패 — ${toHexMasked(frame)}`);
       return;
     }
@@ -200,13 +208,14 @@ function create() {
       return;
     }
 
-    log.status(`[단말기] ${terminalCommandLabel(parsed.cmd)} 보냄`);
+    const event = mapTerminalCommandToEvent(parsed.cmd);
+    if (event) log.status(`[단말기] ${label} 보냄`);
     // 필드는 커맨드마다 구성이 달라 키 기반으로 가릴 수 없다. 값 패턴으로 번호만 가린다.
     log.info(`[SocketGateway] 결제단말기 필드 — ${maskPiiText(JSON.stringify(parsed.fields))}`);
 
-    const event = mapTerminalCommandToEvent(parsed.cmd);
     if (!event) {
       // 매핑 안 된 커맨드도 조용히 버리지 않는다 — 미지원 전문이 오는지 로그로 드러나야 한다.
+      log.status(`[단말기] ${label} 보냄 → 무시 — 팜포인트가 지원하지 않는 커맨드`);
       console.warn(`[SocketGateway] TRM 미지원 커맨드 — cmd=${parsed.cmd} (무시)`);
       return;
     }
@@ -266,7 +275,7 @@ function create() {
     log.status(
       `[팜포인트] ${wsOk && serOk ? "받을 준비 완료" : "❌ 받을 준비 실패"} — ` +
       `캣포스 ${wsOk ? `대기(포트 ${SocketConfig.port})` : "포트 열기 실패"} · ` +
-      `단말기 ${serOk ? "대기" : "시리얼 열기 실패"}`,
+      `단말기 ${serOk ? `대기(통신 속도 ${ser.baudRate() ?? "-"})` : "시리얼 열기 실패"}`,
     );
     if (!wsOk || !serOk) {
       reportLinkFailure(

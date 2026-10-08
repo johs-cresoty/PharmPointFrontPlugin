@@ -18,7 +18,7 @@
 import * as Sentry from "@sentry/browser";
 import { maskPiiText } from "../utils/pii-mask";
 import { log, readLinkLog } from "../utils/log";
-import { readLinkStatus, formatLinkEntry } from "./link-status";
+import { readLinkStatus, formatLinkEntry, readTerminalRx, formatAgo } from "./link-status";
 
 /**
  * Sentry 프로젝트 DSN. 비워두면 수집하지 않는다.
@@ -84,6 +84,40 @@ export function reportLinkFailure(message: string, detail?: unknown): void {
   });
 }
 
+/**
+ * 연동 기록 한 칸에 담을 글자 수.
+ *
+ * Sentry 는 값 하나가 길면 뒤를 잘라낸다. 기록은 오래된 줄부터 쌓여 있어서, 통째로 한 칸에
+ * 넣으면 정작 필요한 최신 줄이 잘려 나갔다(실제로 "11:20:1..." 에서 끊겨 왔다).
+ * 그래서 최신 줄부터 이 크기로 나눠 여러 칸에 담는다. 칸 안에서는 시간 순서 그대로다.
+ * 한도가 바이트 기준이고 한글은 3바이트라, 글자 수는 넉넉히 작게 잡는다.
+ */
+const LINK_LOG_CHUNK_CHARS = 5_000;
+
+/** "연동 기록 01 (최신)" · "연동 기록 02" … 번호가 작을수록 최근이다. 두 자리라 Sentry 정렬에서도 순서가 맞다. */
+function linkLogExtra(lines: string[]): Record<string, string> {
+  if (lines.length === 0) {
+    return { "연동 기록 01 (최신)": "(기록 없음 — 플러그인이 재시작된 직후일 수 있습니다)" };
+  }
+  const chunks: string[][] = [];
+  let cur: string[] = [];
+  let size = 0;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const len = lines[i].length + 1;
+    if (cur.length > 0 && size + len > LINK_LOG_CHUNK_CHARS) {
+      chunks.push(cur);
+      cur = [];
+      size = 0;
+    }
+    cur.unshift(lines[i]);
+    size += len;
+  }
+  chunks.push(cur);
+  const out: Record<string, string> = {};
+  chunks.forEach((c, i) => { out[`연동 기록 ${String(i + 1).padStart(2, "0")}${i === 0 ? " (최신)" : ""}`] = c.join("\n"); });
+  return out;
+}
+
 /** 진단 보내기 연타 방지 — 이 시간 안에 다시 누르면 무시한다. */
 const DIAGNOSTIC_COOLDOWN_MS = 60_000;
 let lastDiagnosticAt = 0;
@@ -111,6 +145,7 @@ export function sendDiagnostic(): boolean {
   // 두 화면이 함께 읽는 곳에 따로 보관해 둔 기록을 실어 보낸다.
   const linkLog = readLinkLog();
   const status  = readLinkStatus();
+  const rx      = readTerminalRx();
 
   Sentry.captureMessage("진단 보내기 — 사용자가 요청한 상태 보고", {
     level: "info",
@@ -122,6 +157,8 @@ export function sendDiagnostic(): boolean {
         `단말기(시리얼)   : ${_device   || "(확인 안 됨)"}`,
         `캣포스     : ${formatLinkEntry(status.캣포스)}`,
         `결제단말기 : ${formatLinkEntry(status.결제단말기)}`,
+        `단말기 마지막 수신       : ${formatAgo(rx.lastRxAt, now)}`,
+        `팜포인트 전문 마지막 수신 : ${formatAgo(rx.lastTrmAt, now)}${rx.lastTrmLabel ? ` · ${rx.lastTrmLabel}` : ""}`,
       ].join("\n"),
       // 기록을 읽는 사람이 프로토콜을 모른다는 전제로 쓴다.
       // 문의의 8할이 "누구 탓이냐" 라서, 줄머리만으로 그게 갈리게 해뒀다.
@@ -136,7 +173,14 @@ export function sendDiagnostic(): boolean {
         "'화면이 안 뜬다' 문의는 이렇게 가릅니다.",
         "  [캣포스]/[단말기] 줄이 없다      → 신호 자체가 안 왔습니다 (POS·단말기 쪽을 보세요)",
         "  줄은 있는데 처리 결과가 없다     → 팜포인트가 받고도 처리 못 한 것입니다",
-        "  '무시' · '변화 없음' 이 있다     → 팜포인트가 일부러 안 바꾼 것입니다",
+        "  '무시' · '변화 없음' · '화면 안 띄움' 이 있다 → 팜포인트가 일부러 안 바꾼 것입니다 (뒤에 이유)",
+        "",
+        "'단말기에서 결제했는데 반응이 없다' 문의는 결제한 시각을 현재 상태의 두 시각과 비교합니다.",
+        "  팜포인트 전문 마지막 수신이 결제 시각 뒤      → 팜포인트가 받았습니다. 연동 기록에서 그 뒤 처리 결과를 보세요",
+        "  단말기 마지막 수신만 결제 시각 뒤             → 시리얼은 살아 있는데 단말기가 팜포인트 전문을 안 보냈습니다 · 확인 필요: 단말기",
+        "  둘 다 결제 시각 전                          → 결제 때 단말기 데이터가 아예 안 들어왔습니다",
+        "                                               단말기 · 선 · 토스 장비 중 어디인지는 플러그인으로 가를 수 없습니다",
+        "  (단말기 마지막 수신은 5초 단위로 기록합니다. 진단은 결제하고 나서 눌러야 비교가 됩니다)",
         "",
         "'· 확인 필요: ○○' 은 어디를 봐야 하는지입니다.",
         "  캣포스          POS 쪽을 봐야 합니다",
@@ -147,7 +191,7 @@ export function sendDiagnostic(): boolean {
         "",
         "'확인 필요' 가 없는 줄은 고칠 것이 없는 줄입니다.",
       ].join("\n"),
-      "연동 기록": linkLog.length ? linkLog.join("\n") : "(기록 없음 — 플러그인이 재시작된 직후일 수 있습니다)",
+      ...linkLogExtra(linkLog),
       "기록 줄수": linkLog.length,
     },
   });
