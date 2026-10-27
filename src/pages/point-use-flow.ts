@@ -90,6 +90,7 @@ export async function renderPointUseFlow(): Promise<void> {
     clearContext();
     showPhoneInput({
       header,
+      agreement: true,
       inactivitySec,
       onSubmit: async () => "done",
       onClose: returnToIdle,
@@ -108,6 +109,7 @@ export async function renderPointUseFlow(): Promise<void> {
 
   showPhoneInput({
     header,
+    agreement: true,
     inactivitySec,
     onSubmit: async (phone) => {
       const outcome = await lookupForUse(phone);

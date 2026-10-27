@@ -3,8 +3,7 @@ import Keypad from "./Keypad";
 
 // 휴대폰 번호 입력 화면 (조회 · 적립 · 사용 · 마케팅 동의 · 처리 중 · 등록된 회원 없음).
 //
-// 디자인: Figma「커넥트_고객화면_디자인」 20261027_수정본 04-1 ~ 04-4, 05-1, 동의 flow.
-// 모든 번호 입력 화면이 아래쪽 동의 영역(모두 동의 · [필수] 개인정보 · [선택] 마케팅)을 쓴다.
+// 디자인: Figma「커넥트_고객화면_디자인」 04-1 ~ 04-7, 05-1.
 // 네이버(PharmPointFrontPlugin-Naver)와 토스(PharmPointFrontPlugin)가 같은 파일을 쓴다.
 // 고칠 때는 두 저장소의 src/ui/PhoneInputView.tsx 를 함께 고친다.
 //
@@ -29,26 +28,14 @@ export type PhoneInputViewProps = {
   onDigit: (d: string) => void;
   onDelete: () => void;
   onDeleteAll: () => void;
-  /** 동의 영역. 체크 상태와 약관 상세 열기는 부르는 쪽이 맡는다. */
-  consent: ConsentState;
+  /** 개인정보 제공 동의 줄. 마케팅 동의처럼 동의를 따로 받는 화면은 넘기지 않는다. */
+  agreement?: { checked: boolean; onToggle: () => void; onOpenDetail: () => void };
   canConfirm: boolean;
   loading: boolean;
   onConfirm: () => void;
   onClose: () => void;
   /** 팝업 · 약관 상세 등 화면 위에 덮는 것. */
   children?: ReactNode;
-};
-
-export type ConsentState = {
-  /** [필수] 개인정보 수집 및 동의. */
-  required: boolean;
-  /** [선택] 마케팅 수신 동의. */
-  marketing: boolean;
-  onToggleAll: () => void;
-  onToggleRequired: () => void;
-  onToggleMarketing: () => void;
-  /** 항목 오른쪽 ">" — 약관 상세. */
-  onOpenDetail: (kind: "privacy" | "marketing") => void;
 };
 
 /** 입력란 세그먼트 가운데 x (Figma phone_number_field 안 좌표). */
@@ -72,8 +59,8 @@ export default function PhoneInputView(p: PhoneInputViewProps) {
         <img src="/icon_close.svg" alt="" width={45} height={45} className="size-[45px]" />
       </button>
 
-      {/* 제목 · 결제금액 — y=69 */}
-      <div className="absolute left-0 right-0 top-[69px] flex flex-col items-center gap-[12px]">
+      {/* 제목 · 결제금액 — y=72 */}
+      <div className="absolute left-0 right-0 top-[72px] flex flex-col items-center gap-[12px]">
         <p className="whitespace-nowrap text-center text-[32px] font-medium leading-[1.35] text-ui-text">
           {p.header.kind === "title" ? p.header.text : `${p.header.amount.toLocaleString()}원 결제`}
         </p>
@@ -109,9 +96,9 @@ export default function PhoneInputView(p: PhoneInputViewProps) {
         )}
       </div>
 
-      {/* 휴대폰 번호 — y=169, 374×66. 오류면 빨간 바탕 · 테두리(안쪽 1.5) */}
+      {/* 휴대폰 번호 — y=182, 374×66. 오류면 빨간 바탕 · 테두리(안쪽 1.5) */}
       <div
-        className={`absolute left-1/2 top-[169px] h-[66px] w-[374px] -translate-x-1/2 overflow-hidden rounded-[12px] ${
+        className={`absolute left-1/2 top-[182px] h-[66px] w-[374px] -translate-x-1/2 overflow-hidden rounded-[12px] ${
           hasError ? "bg-ui-error-surface shadow-[inset_0_0_0_1.5px_#F87C4F]" : "bg-ui-surface-blue"
         }`}
       >
@@ -129,17 +116,40 @@ export default function PhoneInputView(p: PhoneInputViewProps) {
         ))}
       </div>
 
-      {/* 키패드 — y=285 */}
+      {/* 키패드 — y=308 */}
       <Keypad onDigit={p.onDigit} onDelete={p.onDelete} onDeleteAll={p.onDeleteAll} />
 
-      {/* 동의 영역 — y=641, 486×92 (아래에서 121) */}
-      <ConsentArea {...p.consent} />
+      {/* 개인정보 제공 동의 — y=682 (아래에서 144) */}
+      {p.agreement && (
+        <div className="absolute bottom-[144px] left-0 right-0 flex items-center justify-center gap-[5px]">
+          <button type="button" onClick={p.agreement.onToggle} className="flex items-center gap-[5px]">
+            <img
+              src={p.agreement.checked ? "/icon_check_on.svg" : "/icon_check_off.svg"}
+              alt=""
+              width={28}
+              height={28}
+              className="size-[28px]"
+            />
+            <span className="whitespace-nowrap text-center text-[18px] font-normal leading-[1.4] text-ui-text-sub">
+              [필수] 개인정보 제공 동의합니다
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={p.agreement.onOpenDetail}
+            aria-label="개인정보 수집·이용 동의 자세히 보기"
+            className="-ml-[5px] size-[28px]"
+          >
+            <img src="/icon_arrow_right.svg" alt="" width={28} height={28} className="size-[28px]" />
+          </button>
+        </div>
+      )}
 
-      {/* 확인 — 486×75, 아래 여백 33. 조건이 안 되면 Disabled 색. 처리 중이면 돌아가는 아이콘 */}
+      {/* 확인 — 486×75, 아래 여백 46. 조건이 안 되면 Disabled 색. 처리 중이면 돌아가는 아이콘 */}
       <button
         type="button"
         onClick={() => p.canConfirm && !p.loading && p.onConfirm()}
-        className={`absolute bottom-[33px] left-1/2 flex h-[75px] w-[486px] -translate-x-1/2 items-center justify-center rounded-[16px] text-[26px] font-bold leading-[1.4] text-white ${
+        className={`absolute bottom-[46px] left-1/2 flex h-[75px] w-[486px] -translate-x-1/2 items-center justify-center rounded-[16px] text-[26px] font-bold leading-[1.4] text-white ${
           p.canConfirm || p.loading ? "bg-ui-primary" : "bg-ui-disabled"
         }`}
       >
@@ -159,115 +169,6 @@ export default function PhoneInputView(p: PhoneInputViewProps) {
       </button>
 
       {p.children}
-    </div>
-  );
-}
-
-/**
- * Figma consent_area_C — 왼쪽 [모두 동의](120) | 오른쪽 [필수] · [선택] 두 줄.
- * 체크 상자와 문구는 눌러서 체크하고, 오른쪽 ">"(52 폭)만 약관 상세를 연다.
- */
-function ConsentArea(c: ConsentState) {
-  const all = c.required && c.marketing;
-  return (
-    <div className="absolute bottom-[121px] left-1/2 flex h-[92px] w-[486px] -translate-x-1/2 overflow-hidden rounded-[20px] border border-ui-border bg-white">
-      <button
-        type="button"
-        onClick={c.onToggleAll}
-        aria-pressed={all}
-        className="flex h-full w-[120px] shrink-0 flex-col items-center justify-center gap-[8px] border-r border-ui-border"
-      >
-        {/* 32px 원, 체크 19.69 */}
-        <span
-          className={`flex size-[32px] items-center justify-center rounded-[16px] ${
-            all ? "bg-ui-primary" : "border-[2.462px] border-ui-icon-gray"
-          }`}
-        >
-          <img
-            src={all ? "/icon_consent_all_on.svg" : "/icon_consent_all_off.svg"}
-            alt=""
-            width={19.6923}
-            height={19.6923}
-            className="max-w-none"
-          />
-        </span>
-        <span className="whitespace-nowrap text-[18px] font-medium leading-[25px] text-ui-text">모두 동의</span>
-      </button>
-
-      <div className="flex h-full min-w-0 flex-1 flex-col">
-        <ConsentItem
-          badge="필수"
-          label="개인정보 수집 및 동의"
-          checked={c.required}
-          onToggle={c.onToggleRequired}
-          onOpenDetail={() => c.onOpenDetail("privacy")}
-          divider
-        />
-        <ConsentItem
-          badge="선택"
-          label="마케팅 수신 동의"
-          checked={c.marketing}
-          onToggle={c.onToggleMarketing}
-          onOpenDetail={() => c.onOpenDetail("marketing")}
-        />
-      </div>
-    </div>
-  );
-}
-
-function ConsentItem(i: {
-  badge: "필수" | "선택";
-  label: string;
-  checked: boolean;
-  onToggle: () => void;
-  onOpenDetail: () => void;
-  divider?: boolean;
-}) {
-  return (
-    // Figma 높이 45.5(구분선 포함) · 44.5
-    <div className={`flex w-full items-center ${i.divider ? "h-[45.5px] shrink-0 border-b border-ui-border" : "min-h-0 flex-1"}`}>
-      <button
-        type="button"
-        onClick={i.onToggle}
-        aria-pressed={i.checked}
-        className="flex h-full min-w-0 flex-1 items-center gap-[12px] pl-[18px]"
-      >
-        {/* 26px 원, 체크 16 */}
-        <span
-          className={`flex size-[26px] shrink-0 items-center justify-center rounded-[13px] ${
-            i.checked ? "bg-ui-primary" : "border-2 border-ui-icon-gray"
-          }`}
-        >
-          <img
-            src={i.checked ? "/icon_consent_item_on.svg" : "/icon_consent_item_off.svg"}
-            alt=""
-            width={16}
-            height={16}
-            className="max-w-none"
-          />
-        </span>
-        <span className="flex min-w-0 flex-1 items-center gap-[8px] overflow-hidden">
-          {/* 배지 46×26 — 선택 배지 테두리는 안쪽 1px (높이를 늘리지 않게 그림자로 그린다) */}
-          <span
-            className={`shrink-0 rounded-full px-[10px] py-[3px] text-[14px] font-medium leading-[20px] ${
-              i.badge === "필수"
-                ? "bg-ui-surface-blue text-ui-primary"
-                : "bg-white text-ui-text-sub shadow-[inset_0_0_0_1px_#CDE7FF]"
-            }`}
-          >
-            {i.badge}
-          </span>
-          <span className="whitespace-nowrap text-[18px] font-normal leading-[25px] text-ui-text">{i.label}</span>
-        </span>
-      </button>
-      <button
-        type="button"
-        onClick={i.onOpenDetail}
-        aria-label={`${i.label} 자세히 보기`}
-        className="flex h-full w-[52px] shrink-0 items-center justify-center"
-      >
-        <img src="/icon_chevron_right.svg" alt="" width={24} height={24} className="size-[24px]" />
-      </button>
     </div>
   );
 }

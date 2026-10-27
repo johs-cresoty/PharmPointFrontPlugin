@@ -12,6 +12,7 @@ import { SocketGateway } from "../pos/socket-gateway";
 import { navigate, onCleanup } from "../router";
 import { showResult } from "../ui/show-result";
 import { showPhoneInput } from "../ui/phone-input";
+import { showMarketingAgreement } from "../ui/marketing-agreement";
 import { hideScreen } from "../ui/stage";
 import { showIdle } from "../ui/idle";
 import { lockAdmin, unlockAdmin } from "../features/admin/admin-session";
@@ -105,6 +106,7 @@ function renderPhoneInput(): void {
 
   showPhoneInput({
     header: { kind: "title", text: "휴대폰 번호를 입력하세요" },
+    agreement: true,
     inactivitySec: inactivityDuration,
     onSubmit: async (phone) => {
       await SocketGateway.sendCATPhoneNumber(phone);
@@ -124,6 +126,7 @@ function renderCustomerLookup(): void {
 
   showPhoneInput({
     header: { kind: "title", text: "휴대폰 번호를 입력하세요" },
+    agreement: true,
     inactivitySec: inactivityDuration,
     onSubmit: async (phone) => {
       const res = await getPointBalance(phone);
@@ -140,23 +143,37 @@ function renderCustomerLookup(): void {
 }
 
 // ─── CAT_MARKETING_CONSENT (연락처 마케팅 동의 요청) ─
-// 1) 휴대폰 번호 입력 — 동의 영역에서 [필수] · [선택] 동의를 함께 받는다 (Figma 20261027_수정본 동의 flow)
-// 2) 입력 번호 + 선택(마케팅) 동의 여부를 캣포스로 전송 → 결과 화면("입력 완료")
+// 1) 휴대폰 번호 입력 — 새 디자인 (Figma 04-5, 인라인 개인정보 동의 줄 없음)
+// 2) 약관 동의 — 새 디자인 (Figma 07-1 · 07-2, 필수 1 + 선택 1, 약관 상세는 화면 안에서)
+// 3) 입력 번호 + 선택(마케팅) 동의 여부를 캣포스로 전송 → 결과 화면("입력 완료")
 
 function renderMarketingConsent(): void {
   idleActive = false;
 
+  // 번호 입력은 새 디자인(Figma 04-5) — 인라인 개인정보 동의 없음 (동의는 다음 약관 화면에서).
   showPhoneInput({
     header: { kind: "title", text: "휴대폰 번호를 입력하세요" },
+    agreement: false,
     inactivitySec: inactivityDuration,
-    onSubmit: async (phone, marketingConsent) => {
-      void SocketGateway.sendCATMarketingConsent(phone, marketingConsent);
-      // 대기화면 직행 대신 결과 화면("입력 완료 / 감사합니다") 표시 후 복귀
-      void showResult({ mode: "MARKETING_DONE", onDone: () => { void renderIdle(); } });
+    onSubmit: async (phone) => {
+      renderMarketingAgreement(phone);
       return "done";
     },
     onClose: cancelToIdle,
     onTimeout: cancelToIdle,
+  });
+}
+
+function renderMarketingAgreement(phone: string): void {
+  showMarketingAgreement({
+    inactivitySec: inactivityDuration,
+    onTimeout: cancelToIdle,
+    onConfirm: (marketingConsent) => {
+      void SocketGateway.sendCATMarketingConsent(phone, marketingConsent);
+      // 대기화면 직행 대신 결과 화면("입력 완료 / 감사합니다") 표시 후 복귀
+      void showResult({ mode: "MARKETING_DONE", onDone: () => { void renderIdle(); } });
+    },
+    onClose: cancelToIdle,
   });
 }
 

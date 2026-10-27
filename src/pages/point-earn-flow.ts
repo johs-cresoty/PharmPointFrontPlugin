@@ -98,6 +98,7 @@ export async function renderPointEarnFlow(): Promise<void> {
   let active = true;
   const screen = showPhoneInput({
     header,
+    agreement: true,
     inactivitySec,
     onSubmit: (phone) => submitEarn(ctx, phone, estimatePromise),
     onClose: () => abortEarn("고객이 뒤로가기"),

@@ -55,11 +55,11 @@ export default function SettingsShell({
 
         <div className="flex-1" />
 
-        {/* 나가기 — 예전 각 화면의 [닫기] 를 대신한다. Figma y=766 (아래 여백 52) */}
+        {/* 나가기 — 예전 각 화면의 [닫기] 를 대신한다 */}
         <button
           type="button"
           onClick={onExit}
-          className="mb-[52px] flex w-full items-center gap-[4px] rounded-[12px] px-[10px] py-[6px] text-[16px] font-medium leading-[1.35] text-ui-text-sub"
+          className="mb-[65px] flex w-full items-center gap-[4px] rounded-[12px] px-[10px] py-[6px] text-[16px] font-medium leading-[1.35] text-ui-text-sub"
         >
           <img src="/icon_exit.svg" alt="" width={24} height={24} className="size-[24px]" />
           나가기

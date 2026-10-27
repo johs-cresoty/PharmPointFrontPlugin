@@ -48,6 +48,7 @@ export async function renderMemberSearch(): Promise<void> {
 
   showPhoneInput({
     header: { kind: "title", text: "휴대폰 번호를 입력하세요" },
+    agreement: true,
     inactivitySec,
     onSubmit: submitInquiry,
     onClose: () => { navigate("/"); },

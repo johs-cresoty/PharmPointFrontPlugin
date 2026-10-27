@@ -15,20 +15,18 @@ import PhoneInputView, { type PhoneInputHeader } from "./PhoneInputView";
 import { InactivityPopup, NetworkErrorPopup, PointUnavailablePopup, ServerErrorPopup } from "./Popups";
 import { showScreen } from "./stage";
 import AgreementDetailView from "./AgreementDetailView";
-import { MARKETING_DOC, PRIVACY_DOC } from "./agreement-content";
+import { PRIVACY_DOC } from "./agreement-content";
 import { useInactivity } from "./use-inactivity";
 
 export type PhoneSubmitOutcome = "done" | "notFound" | "network" | "server";
 
 export type PhoneInputOptions = {
   header: PhoneInputHeader;
+  /** 개인정보 제공 동의 줄을 보일지. 마케팅 동의처럼 동의를 따로 받으면 false. */
+  agreement: boolean;
   /** 무입력 대기 시간(초). 마지막 5초는 "대기화면으로 이동합니다" 팝업. 0 이하면 끈다. */
   inactivitySec: number;
-  /**
-   * [확인]. [필수] 동의를 체크해야 눌린다. marketingConsent 는 [선택] 마케팅 수신 동의 여부 —
-   * 마케팅 동의 요청에서만 회신에 싣고, 포인트 화면은 쓰지 않는다.
-   */
-  onSubmit: (phone: string, marketingConsent: boolean) => Promise<PhoneSubmitOutcome>;
+  onSubmit: (phone: string) => Promise<PhoneSubmitOutcome>;
   /** X 버튼. */
   onClose: () => void;
   /** 무입력으로 시간이 다 됨. */
@@ -69,24 +67,15 @@ export function showPhoneInput(opts: PhoneInputOptions): PhoneInputHandle {
 
 function PhoneInputScreen(o: PhoneInputOptions) {
   const [phone, setPhone] = useState("010");
-  // 동의 영역 (Figma 20261027_수정본 동의 flow) — 처음엔 모두 해제. [필수] 를 체크해야 확인이 켜진다.
-  const [required, setRequired] = useState(false);
-  const [marketing, setMarketing] = useState(false);
+  const [agreed, setAgreed] = useState(true);
   const [loading, setLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [errorPopup, setErrorPopup] = useState<"network" | "server" | null>(null);
   const [unavailable, setUnavailable] = useState(o.pointUnavailable ?? null);
-  // 약관 상세(Figma 07-3) — 화면 위에 덮는다. 입력값 · 체크는 그대로 남는다.
-  const [detail, setDetail] = useState<"privacy" | "marketing" | null>(null);
+  // 약관 상세(Figma 07-3 개인정보 수집 및 동의) — 화면 위에 덮는다. 입력값은 그대로 남는다.
+  const [showDetail, setShowDetail] = useState(false);
 
-  const canConfirm = phone.length === MAX_PHONE && !loading && required;
-
-  // 모두 동의 — 둘 다 체크돼 있으면 둘 다 해제, 아니면 둘 다 체크.
-  const toggleAll = () => {
-    const next = !(required && marketing);
-    setRequired(next);
-    setMarketing(next);
-  };
+  const canConfirm = phone.length === MAX_PHONE && !loading && (!o.agreement || agreed);
 
   const edit = (next: (p: string) => string) => {
     setNotFound(false);
@@ -98,7 +87,7 @@ function PhoneInputScreen(o: PhoneInputOptions) {
     setLoading(true);
     let outcome: PhoneSubmitOutcome;
     try {
-      outcome = await o.onSubmit(phone, marketing);
+      outcome = await o.onSubmit(phone);
     } catch (e) {
       console.error("[PhoneInput] 처리 실패:", e);
       outcome = isUnreachable(e) ? "network" : "server";
@@ -122,14 +111,11 @@ function PhoneInputScreen(o: PhoneInputOptions) {
         onDigit={(d) => edit((p) => (p.length < MAX_PHONE ? p + d : p))}
         onDelete={() => edit((p) => p.slice(0, -1))}
         onDeleteAll={() => edit(() => "")}
-        consent={{
-          required,
-          marketing,
-          onToggleAll: toggleAll,
-          onToggleRequired: () => setRequired((v) => !v),
-          onToggleMarketing: () => setMarketing((v) => !v),
-          onOpenDetail: setDetail,
-        }}
+        agreement={
+          o.agreement
+            ? { checked: agreed, onToggle: () => setAgreed((v) => !v), onOpenDetail: () => setShowDetail(true) }
+            : undefined
+        }
         canConfirm={canConfirm}
         loading={loading}
         onConfirm={submit}
@@ -149,9 +135,7 @@ function PhoneInputScreen(o: PhoneInputOptions) {
             }}
           />
         )}
-        {detail && (
-          <AgreementDetailView doc={detail === "privacy" ? PRIVACY_DOC : MARKETING_DOC} onClose={() => setDetail(null)} />
-        )}
+        {showDetail && <AgreementDetailView doc={PRIVACY_DOC} onClose={() => setShowDetail(false)} />}
         {warnLeft !== null && <InactivityPopup remaining={warnLeft} onContinue={resetTimer} />}
       </PhoneInputView>
     </div>
