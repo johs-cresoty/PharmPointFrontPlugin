@@ -31,6 +31,7 @@ export default {
           "text-sub":     "#717C84", // Text Sub     — 보조 문구(카운트다운·안내)
           border:         "#CDE7FF", // Border       — 포인트 배지 테두리
           disabled:       "#D0D0D0", // Disabled     — 포인트 부족 배지 테두리
+          "icon-gray":    "#B1B6BC", // Icon Gray    — 동의 영역 체크 해제 원 · 체크
           surface:        "#F3F7FA", // Surface      — 키패드·토글 바탕
           "surface-blue": "#E8F4FF", // Surface Blue — 보조 버튼 바탕
           error:          "#F8552C", // Error        — 오류 문구

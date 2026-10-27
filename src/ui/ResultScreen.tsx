@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 // 결과 화면 (조회 · 적립 완료 · 사용 완료 · 포인트 부족 · 마케팅 동의 완료).
 //
-// 디자인: Figma「커넥트_고객화면_디자인」 08-1 ~ 08-5.
+// 디자인: Figma「커넥트_고객화면_디자인」 20261027_수정본 08-1 ~ 08-5.
 // 네이버 플러그인(PharmPointFrontPlugin-Naver src/pages/Result.tsx)과 같은 화면이다.
 // 수치는 534×854 기준 px 그대로이고, 토스 400×640 에는 무대(stage.tsx)가 줄여 맞춘다.
 //
@@ -132,18 +132,18 @@ export default function ResultScreen(props: ResultScreenProps) {
 
       <div className="flex-1" />
 
-      {/* 자동 닫힘 카운트다운 — Figma y=696, 확인 버튼 위 12.7px */}
+      {/* 자동 닫힘 카운트다운 — Figma y=706, 확인 버튼 위 15.7px */}
       {seconds > 0 && (
         <p className="whitespace-nowrap text-center text-[18px] font-normal leading-[1.35] text-ui-text-sub">
           {remaining}초 후 창 자동 닫힘
         </p>
       )}
 
-      {/* 확인 — Figma confirm_btn 486×75, 아래 여백 46 */}
+      {/* 확인 — Figma confirm_btn 486×75, 아래 여백 33 */}
       <button
         type="button"
         onClick={finish}
-        className="mb-[46px] mt-[12.7px] flex h-[75px] w-[486px] shrink-0 items-center justify-center rounded-[16px] bg-ui-primary text-[26px] font-bold leading-[1.4] text-white"
+        className="mb-[33px] mt-[15.7px] flex h-[75px] w-[486px] shrink-0 items-center justify-center rounded-[16px] bg-ui-primary text-[26px] font-bold leading-[1.4] text-white"
       >
         확인
       </button>

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 // 숫자 키패드 — 번호 입력(04) · 사용 포인트 입력(06) 공통.
 //
-// 디자인: Figma「커넥트_고객화면_디자인」 number_pad (y=308, 162×86 칸 3열 4행).
+// 디자인: Figma「커넥트_고객화면_디자인」 number_pad (y=285, 162×86 칸 3열 4행).
 // 네이버(PharmPointFrontPlugin-Naver)와 토스(PharmPointFrontPlugin)가 같은 파일을 쓴다.
 // 고칠 때는 두 저장소의 src/ui/Keypad.tsx 를 함께 고친다.
 
@@ -14,7 +14,7 @@ export type KeypadProps = {
 
 export default function Keypad(p: KeypadProps) {
   return (
-    <div className="absolute left-[24px] top-[308px] grid w-[486px] select-none grid-cols-3">
+    <div className="absolute left-[24px] top-[285px] grid w-[486px] select-none grid-cols-3">
       {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
         <PadKey key={d} onClick={() => p.onDigit(d)}>
           <span className="text-[38px] font-normal leading-[normal] text-ui-text">{d}</span>
