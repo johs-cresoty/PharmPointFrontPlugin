@@ -79,7 +79,27 @@ export function ackUsePointWithCustomer(usePoint: string | number): string {
   return makeJson(C.CATPOS_USE_POINT_WITH_CUSTOMER_ACK, { usePoint });
 }
 
-/** MARKETING_CONSENT_ACK : { phone, marketingConsent } — 입력 번호 + 선택(마케팅) 동의 여부 */
-export function ackMarketingConsent(phone: string, marketingConsent: boolean): string {
-  return makeJson(C.CATPOS_MARKETING_CONSENT_ACK, { phone, marketingConsent });
+/**
+ * 약관 동의 화면의 항목별 동의 여부 (만 14세 확인은 보내지 않는다). 네이버 marketing-codec 과 같다.
+ *   privacyRequired  [필수] 약국 서비스 개인정보 수집·이용
+ *   medicationSms    [선택] 복약안내 문자 받기
+ *   pharmacyAd       [선택] 광고성 정보 수신 — 혜택 안내 문자 (약국)
+ *   cresotyAd        [선택] 광고성 정보 수신 — 제휴 혜택 문자 (크레소티)
+ */
+export type MarketingConsentResult = {
+  privacyRequired: boolean;
+  medicationSms: boolean;
+  pharmacyAd: boolean;
+  cresotyAd: boolean;
+};
+
+/** MARKETING_CONSENT_ACK : { phone, privacyRequired, medicationSms, pharmacyAd, cresotyAd } — 입력 번호 + 항목별 동의 여부 */
+export function ackMarketingConsent(phone: string, consent: MarketingConsentResult): string {
+  return makeJson(C.CATPOS_MARKETING_CONSENT_ACK, {
+    phone,
+    privacyRequired: consent.privacyRequired,
+    medicationSms: consent.medicationSms,
+    pharmacyAd: consent.pharmacyAd,
+    cresotyAd: consent.cresotyAd,
+  });
 }

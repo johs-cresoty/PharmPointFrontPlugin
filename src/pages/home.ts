@@ -12,7 +12,8 @@ import { SocketGateway } from "../pos/socket-gateway";
 import { navigate, onCleanup } from "../router";
 import { showResult } from "../ui/show-result";
 import { showPhoneInput } from "../ui/phone-input";
-import { showMarketingAgreement } from "../ui/marketing-agreement";
+import { CONSENT_SUBTITLE } from "../ui/consent-terms";
+import { checkMember } from "./member-check";
 import { hideScreen } from "../ui/stage";
 import { showIdle } from "../ui/idle";
 import { lockAdmin, unlockAdmin } from "../features/admin/admin-session";
@@ -100,13 +101,14 @@ function cancelToIdle(): void {
   void renderIdle();
 }
 
-// 번호 입력 화면은 새 디자인(Figma 04-1). 무입력 타이머도 화면이 직접 관리한다.
+// 번호 입력 → 약관 동의 → 동의 처리 완료 (Figma 동의 개편 플로우). 무입력 타이머도 화면이 직접 관리한다.
+// 번호 회신은 동의 처리 완료 [확인] 뒤에 한다. 안내 문구는 조회와 같다(네이버도 조회 화면으로 받는다).
 function renderPhoneInput(): void {
   idleActive = false;
 
   showPhoneInput({
     header: { kind: "title", text: "휴대폰 번호를 입력하세요" },
-    agreement: true,
+    consentSubtitle: CONSENT_SUBTITLE.lookup,
     inactivitySec: inactivityDuration,
     onSubmit: async (phone) => {
       await SocketGateway.sendCATPhoneNumber(phone);
@@ -119,15 +121,16 @@ function renderPhoneInput(): void {
 }
 
 // ─── CAT_REQUEST_CUSTOMER (조회 → 회원코드 응답) ─
-// 조회 화면과 같은 번호 입력 화면(Figma 04-1)을 쓴다. 미가입은 입력란 아래 안내(05-1).
+// 조회 화면과 같은 번호 입력 → 회원 확인 → 약관 동의 → 동의 처리 완료를 쓴다. 미가입은 약관 동의 전에 번호 입력에서 안내(05-1).
 
 function renderCustomerLookup(): void {
   idleActive = false;
 
   showPhoneInput({
     header: { kind: "title", text: "휴대폰 번호를 입력하세요" },
-    agreement: true,
+    consentSubtitle: CONSENT_SUBTITLE.lookup,
     inactivitySec: inactivityDuration,
+    checkMember: (phone) => checkMember(phone, "조회"),
     onSubmit: async (phone) => {
       const res = await getPointBalance(phone);
       if (!res.success || !res.customer) {
@@ -143,37 +146,38 @@ function renderCustomerLookup(): void {
 }
 
 // ─── CAT_MARKETING_CONSENT (연락처 마케팅 동의 요청) ─
-// 1) 휴대폰 번호 입력 — 새 디자인 (Figma 04-5, 인라인 개인정보 동의 줄 없음)
-// 2) 약관 동의 — 새 디자인 (Figma 07-1 · 07-2, 필수 1 + 선택 1, 약관 상세는 화면 안에서)
-// 3) 입력 번호 + 선택(마케팅) 동의 여부를 캣포스로 전송 → 결과 화면("입력 완료")
+// 번호 입력 → 약관 동의 [동의] 에서 입력 번호 + 항목별 동의 여부를 캣포스로 전송
+// → 동의 처리 완료 [확인] → 결과 화면("입력 완료")
+// 회신한 뒤(동의 처리 완료 화면)의 시간 초과는 FAIL 없이 대기화면으로 — 캣포스가 결과를 두 번 받지 않게.
 
 function renderMarketingConsent(): void {
   idleActive = false;
+  let replied = false;
 
-  // 번호 입력은 새 디자인(Figma 04-5) — 인라인 개인정보 동의 없음 (동의는 다음 약관 화면에서).
   showPhoneInput({
     header: { kind: "title", text: "휴대폰 번호를 입력하세요" },
-    agreement: false,
+    consentSubtitle: CONSENT_SUBTITLE.marketing,
     inactivitySec: inactivityDuration,
-    onSubmit: async (phone) => {
-      renderMarketingAgreement(phone);
+    onAgree: (phone, consent) => {
+      if (replied) return;
+      replied = true;
+      void SocketGateway.sendCATMarketingConsent(phone, {
+        privacyRequired: consent.privacy,
+        medicationSms: consent.medication,
+        pharmacyAd: consent.pharmacyAd,
+        cresotyAd: consent.cresotyAd,
+      });
+    },
+    onSubmit: async () => {
+      // 대기화면 직행 대신 결과 화면("입력 완료 / 감사합니다") 표시 후 복귀
+      void showResult({ mode: "MARKETING_DONE", onDone: () => { void renderIdle(); } });
       return "done";
     },
     onClose: cancelToIdle,
-    onTimeout: cancelToIdle,
-  });
-}
-
-function renderMarketingAgreement(phone: string): void {
-  showMarketingAgreement({
-    inactivitySec: inactivityDuration,
-    onTimeout: cancelToIdle,
-    onConfirm: (marketingConsent) => {
-      void SocketGateway.sendCATMarketingConsent(phone, marketingConsent);
-      // 대기화면 직행 대신 결과 화면("입력 완료 / 감사합니다") 표시 후 복귀
-      void showResult({ mode: "MARKETING_DONE", onDone: () => { void renderIdle(); } });
+    onTimeout: () => {
+      if (replied) void renderIdle();
+      else cancelToIdle();
     },
-    onClose: cancelToIdle,
   });
 }
 

@@ -1,15 +1,17 @@
 import type { ReactNode } from "react";
 import Keypad from "./Keypad";
 
-// 휴대폰 번호 입력 화면 (조회 · 적립 · 사용 · 마케팅 동의 · 처리 중 · 등록된 회원 없음).
+// 휴대폰 번호 입력 화면 (조회 · 적립 · 사용 · 마케팅 동의 · 등록된 회원 없음).
 //
-// 디자인: Figma「커넥트_고객화면_디자인」 04-1 ~ 04-7, 05-1.
+// 디자인: Figma「커넥트_고객화면_디자인」 동의 개편 플로우 04-1 · 04-2 · 04-3 (node 283:1198 · 1238 · 1289),
+//   등록된 회원 없음 05-1.
 // 네이버(PharmPointFrontPlugin-Naver)와 토스(PharmPointFrontPlugin)가 같은 파일을 쓴다.
 // 고칠 때는 두 저장소의 src/ui/PhoneInputView.tsx 를 함께 고친다.
 //
 // 수치는 534×854 기준 px 그대로다. 토스 400×640 에는 무대(stage.tsx)가 줄여 맞춘다.
-// 위쪽(제목 · 입력란 · 키패드)은 위에서, 아래쪽(동의 · 확인)은 아래에서 잡아
+// 위쪽(제목 · 입력란 · 키패드)은 위에서, 아래쪽(안내 · 확인)은 아래에서 잡아
 // 화면 높이가 조금 달라도 확인 버튼이 잘리지 않게 한다.
+// 동의는 이 화면에서 받지 않는다. [확인] 다음 약관 동의 화면(ConsentView)에서 받는다.
 //
 // 이 컴포넌트는 그리기만 한다. 입력값 · 서버 호출 · 회신은 부르는 쪽이 맡는다.
 
@@ -28,8 +30,8 @@ export type PhoneInputViewProps = {
   onDigit: (d: string) => void;
   onDelete: () => void;
   onDeleteAll: () => void;
-  /** 개인정보 제공 동의 줄. 마케팅 동의처럼 동의를 따로 받는 화면은 넘기지 않는다. */
-  agreement?: { checked: boolean; onToggle: () => void; onOpenDetail: () => void };
+  /** 확인 버튼 위 회색 안내 — 줄마다 하나 (phoneInputCaption). */
+  caption: string[];
   canConfirm: boolean;
   loading: boolean;
   onConfirm: () => void;
@@ -59,8 +61,8 @@ export default function PhoneInputView(p: PhoneInputViewProps) {
         <img src="/icon_close.svg" alt="" width={45} height={45} className="size-[45px]" />
       </button>
 
-      {/* 제목 · 결제금액 — y=72 */}
-      <div className="absolute left-0 right-0 top-[72px] flex flex-col items-center gap-[12px]">
+      {/* 제목 · 결제금액 — y=69 */}
+      <div className="absolute left-0 right-0 top-[69px] flex flex-col items-center gap-[12px]">
         <p className="whitespace-nowrap text-center text-[32px] font-medium leading-[1.35] text-ui-text">
           {p.header.kind === "title" ? p.header.text : `${p.header.amount.toLocaleString()}원 결제`}
         </p>
@@ -96,9 +98,9 @@ export default function PhoneInputView(p: PhoneInputViewProps) {
         )}
       </div>
 
-      {/* 휴대폰 번호 — y=182, 374×66. 오류면 빨간 바탕 · 테두리(안쪽 1.5) */}
+      {/* 휴대폰 번호 — y=169, 374×66. 오류면 빨간 바탕 · 테두리(안쪽 1.5) */}
       <div
-        className={`absolute left-1/2 top-[182px] h-[66px] w-[374px] -translate-x-1/2 overflow-hidden rounded-[12px] ${
+        className={`absolute left-1/2 top-[169px] h-[66px] w-[374px] -translate-x-1/2 overflow-hidden rounded-[12px] ${
           hasError ? "bg-ui-error-surface shadow-[inset_0_0_0_1.5px_#F87C4F]" : "bg-ui-surface-blue"
         }`}
       >
@@ -116,40 +118,25 @@ export default function PhoneInputView(p: PhoneInputViewProps) {
         ))}
       </div>
 
-      {/* 키패드 — y=308 */}
-      <Keypad onDigit={p.onDigit} onDelete={p.onDelete} onDeleteAll={p.onDeleteAll} />
+      {/* 키패드 — y=285 */}
+      <Keypad top={285} onDigit={p.onDigit} onDelete={p.onDelete} onDeleteAll={p.onDeleteAll} />
 
-      {/* 개인정보 제공 동의 — y=682 (아래에서 144) */}
-      {p.agreement && (
-        <div className="absolute bottom-[144px] left-0 right-0 flex items-center justify-center gap-[5px]">
-          <button type="button" onClick={p.agreement.onToggle} className="flex items-center gap-[5px]">
-            <img
-              src={p.agreement.checked ? "/icon_check_on.svg" : "/icon_check_off.svg"}
-              alt=""
-              width={28}
-              height={28}
-              className="size-[28px]"
-            />
-            <span className="whitespace-nowrap text-center text-[18px] font-normal leading-[1.4] text-ui-text-sub">
-              [필수] 개인정보 제공 동의합니다
+      {/* 안내 — 틀 y=656 (안쪽 여백 10, 최대 68), 확인 버튼 위 */}
+      <div className="absolute left-1/2 top-[656px] flex max-h-[68px] w-[486px] -translate-x-1/2 items-center justify-center p-[10px]">
+        <p className="whitespace-nowrap text-center text-[15px] font-normal leading-[21px] text-ui-text-sub">
+          {p.caption.map((line, i) => (
+            <span key={i} className="block">
+              {line}
             </span>
-          </button>
-          <button
-            type="button"
-            onClick={p.agreement.onOpenDetail}
-            aria-label="개인정보 수집·이용 동의 자세히 보기"
-            className="-ml-[5px] size-[28px]"
-          >
-            <img src="/icon_arrow_right.svg" alt="" width={28} height={28} className="size-[28px]" />
-          </button>
-        </div>
-      )}
+          ))}
+        </p>
+      </div>
 
-      {/* 확인 — 486×75, 아래 여백 46. 조건이 안 되면 Disabled 색. 처리 중이면 돌아가는 아이콘 */}
+      {/* 확인 — 486×75, y=746 (아래 여백 33). 조건이 안 되면 Disabled 색. 처리 중이면 돌아가는 아이콘 */}
       <button
         type="button"
         onClick={() => p.canConfirm && !p.loading && p.onConfirm()}
-        className={`absolute bottom-[46px] left-1/2 flex h-[75px] w-[486px] -translate-x-1/2 items-center justify-center rounded-[16px] text-[26px] font-bold leading-[1.4] text-white ${
+        className={`absolute bottom-[33px] left-1/2 flex h-[75px] w-[486px] -translate-x-1/2 items-center justify-center rounded-[16px] text-[26px] font-bold leading-[1.4] text-white ${
           p.canConfirm || p.loading ? "bg-ui-primary" : "bg-ui-disabled"
         }`}
       >

@@ -361,8 +361,8 @@ function create() {
   function sendCATUsePointWithCustomerResult(usePoint: string | number): Promise<void> {
     return sendCAT(CatposCodec.ackUsePointWithCustomer(usePoint));
   }
-  function sendCATMarketingConsent(phone: string, marketingConsent: boolean): Promise<void> {
-    return sendCAT(CatposCodec.ackMarketingConsent(phone, marketingConsent));
+  function sendCATMarketingConsent(phone: string, consent: CatposCodec.MarketingConsentResult): Promise<void> {
+    return sendCAT(CatposCodec.ackMarketingConsent(phone, consent));
   }
 
   // ── 단말기(TRM) 응답 송신 ───────────────────

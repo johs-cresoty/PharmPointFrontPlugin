@@ -16,6 +16,7 @@ import type { EstimateResult } from "../features/point-transaction/point-transac
 import { navigate, onCleanup } from "../router";
 import { getInactivityTimeoutSeconds } from "../features/app-config/app-config.service";
 import { showPhoneInput, type PhoneSubmitOutcome } from "../ui/phone-input";
+import { CONSENT_SUBTITLE } from "../ui/consent-terms";
 import { hideScreen } from "../ui/stage";
 import { log } from "../utils/log";
 import { maskPhone } from "../utils/pii-mask";
@@ -98,7 +99,8 @@ export async function renderPointEarnFlow(): Promise<void> {
   let active = true;
   const screen = showPhoneInput({
     header,
-    agreement: true,
+    consentSubtitle: CONSENT_SUBTITLE.earn,
+    earn: true,
     inactivitySec,
     onSubmit: (phone) => submitEarn(ctx, phone, estimatePromise),
     onClose: () => abortEarn("고객이 뒤로가기"),

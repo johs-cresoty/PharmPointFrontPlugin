@@ -10,7 +10,7 @@
  * 3) 사용 포인트 입력도 새 디자인(Figma 06-1 · 06-2, src/ui/use-point-input).
  * 무입력 타이머는 두 화면이 각자 관리한다.
  */
-import { getCustomer, getPointBalance, inquiryFailureNote, type InquiryResult } from "../features/point-inquiry/point-inquiry.service";
+import { getPointBalance, inquiryFailureNote, type InquiryResult } from "../features/point-inquiry/point-inquiry.service";
 import { getInactivityTimeoutSeconds, getPointUseConfig } from "../features/app-config/app-config.service";
 import { cancelUse, CancelMessage, relayUseResult, remainingPoint, PointUseSource, type PointUseSourceType } from "../features/point-use/point-use.service";
 import { goUseSuccess, goInsufficient } from "../features/result-page/result-navigator";
@@ -18,6 +18,8 @@ import { SocketGateway } from "../pos/socket-gateway";
 import { navigate, onCleanup } from "../router";
 import { isUnreachable, showPhoneInput, type PhoneSubmitOutcome } from "../ui/phone-input";
 import { showUsePointInput } from "../ui/use-point-input";
+import { CONSENT_SUBTITLE } from "../ui/consent-terms";
+import { checkMember } from "./member-check";
 import { hideScreen } from "../ui/stage";
 import { log } from "../utils/log";
 import { maskPhone } from "../utils/pii-mask";
@@ -90,7 +92,7 @@ export async function renderPointUseFlow(): Promise<void> {
     clearContext();
     showPhoneInput({
       header,
-      agreement: true,
+      consentSubtitle: CONSENT_SUBTITLE.use,
       inactivitySec,
       onSubmit: async () => "done",
       onClose: returnToIdle,
@@ -109,8 +111,9 @@ export async function renderPointUseFlow(): Promise<void> {
 
   showPhoneInput({
     header,
-    agreement: true,
+    consentSubtitle: CONSENT_SUBTITLE.use,
     inactivitySec,
+    checkMember: (phone) => checkMember(phone, "사용"),
     onSubmit: async (phone) => {
       const outcome = await lookupForUse(phone);
       if (outcome.kind !== "found") return outcome.kind;
@@ -130,17 +133,14 @@ export async function renderPointUseFlow(): Promise<void> {
   onCleanup(() => { hideScreen(); });
 }
 
-/** 번호로 회원 · 잔액 조회. 화면에 보일 결과(미가입 · 오류)도 여기서 정한다. */
+/**
+ * 번호로 잔액 조회. 화면에 보일 결과(미가입 · 오류)도 여기서 정한다.
+ * 회원 여부는 약관 동의 전에 확인했다(checkMember) — 여기는 동의 처리 완료 [확인] 뒤다.
+ */
 async function lookupForUse(
   phone: string,
 ): Promise<{ kind: "found"; res: Extract<InquiryResult, { success: true }> } | { kind: Exclude<PhoneSubmitOutcome, "done"> }> {
   try {
-    const exist = await getCustomer(phone);
-    if (!exist.success || !exist.customer) {
-      // 미가입인지 서버가 못 받은 것인지 갈라 남긴다.
-      log.status(`[팜포인트·사용] 회원 조회 실패 — ${maskPhone(phone)} · ${inquiryFailureNote(exist)}`);
-      return { kind: exist.success === false && !exist.notFound ? "server" : "notFound" };
-    }
     const res = await getPointBalance(phone);
     if (!res.success || !res.customer) {
       log.status(`[팜포인트·사용] 포인트 조회 실패 — ${maskPhone(phone)} · ${inquiryFailureNote(res)}`);
