@@ -9,7 +9,7 @@
  *     Toss SN · 시리얼 통신 속도 · 진단 보내기.
  *
  * 화면은 네이버와 같은 SettingsShell · Setting*View (Figma 09-3 · 09-5 · 09-6 · 09-7, src/ui/settings).
- *   - 포인트설정 : 최소 포인트 사용 여부 · 최소 사용 포인트
+ *   - 포인트설정 : 포인트 조회 기능 사용 여부 · 최소 포인트 사용 여부 · 최소 사용 포인트
  *   - 테마설정   : 대기화면 배경 테마(A~E, 미리보기) · 가격표시 테마(라이트/다크)
  *   - 화면대기   : 완료 화면 자동 꺼짐 · 입력 화면 미동작 자동 꺼짐
  * 값은 단말 저장소(sdk.storage)에 둔다. 고객 화면은 대기화면으로 돌아올 때 다시 읽는다.
@@ -22,9 +22,11 @@ import {
   getMinPoint,
   getPriceDisplayTheme,
   getResultTimeoutSeconds,
+  isLookupEnabled,
   isMinPointEnabled,
   setIdleThemeIndex,
   setInactivityTimeoutSeconds,
+  setLookupEnabled,
   setMinPointConfig,
   setPriceDisplayTheme,
   setResultTimeoutSeconds,
@@ -58,7 +60,8 @@ export async function renderSettings(): Promise<void> {
   }
   onCleanup(() => { hideScreen(); });
 
-  const [enabled, minPoint, autoClose, inactive, themeIndex, priceTheme, storeName] = await Promise.all([
+  const [lookupEnabled, enabled, minPoint, autoClose, inactive, themeIndex, priceTheme, storeName] = await Promise.all([
+    isLookupEnabled(),
     isMinPointEnabled(),
     getMinPoint(),
     getResultTimeoutSeconds(),
@@ -72,8 +75,11 @@ export async function renderSettings(): Promise<void> {
     <SettingsShell
       point={
         <SettingPointView
-          initial={{ enabled, minPoint }}
-          onSave={(v) => setMinPointConfig(v.enabled, v.minPoint)}
+          initial={{ lookupEnabled, enabled, minPoint }}
+          onSave={async (v) => {
+            await setLookupEnabled(v.lookupEnabled);
+            await setMinPointConfig(v.enabled, v.minPoint);
+          }}
         />
       }
       theme={

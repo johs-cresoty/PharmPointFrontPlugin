@@ -31,6 +31,8 @@ export type IdleOptions = {
   /** 매장명 (토스 매장 정보). 아직 못 읽었으면 null. */
   storeName: string | null;
   onLookup: () => void;
+  /** [포인트 조회] 버튼을 보일지 (환경설정 > 포인트 설정 > 포인트 조회 기능 사용 여부). */
+  showLookup: boolean;
   /** 관리자 팝업이 열리고 닫힐 때. 열려 있는 동안은 대기 상태가 아니다(가격표시기로 바뀌지 않게). */
   onAdminOpenChange: (open: boolean) => void;
   /** 비밀번호 대조 통과 — 환경설정으로 간다. */
@@ -79,6 +81,7 @@ function IdleScreen(o: IdleOptions) {
       storeNameGap={theme.storeNameGap}
       storeName={o.storeName}
       onLookup={o.onLookup}
+      showLookup={o.showLookup}
       storeNameProps={{
         onPointerDown: startPress,
         onPointerUp: cancelPress,

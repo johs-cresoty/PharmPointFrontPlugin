@@ -24,6 +24,11 @@ export type IdleViewProps = {
   /** 매장명 아래 ~ 버튼 위 간격. Figma 테마A·B·C·E 25.4, 테마D 15.4. */
   storeNameGap?: number;
   onLookup: () => void;
+  /**
+   * [포인트 조회] 버튼을 보일지. 기본 true.
+   * false 면 버튼을 감추고 누를 수 없게 한다. 자리는 그대로 두어 매장명 위치가 바뀌지 않는다.
+   */
+  showLookup?: boolean;
   /** 매장명에 붙일 이벤트 (네이버: 2초 롱프레스 → 관리자). */
   storeNameProps?: HTMLAttributes<HTMLParagraphElement>;
   /** 화면 위에 덮는 것 (관리자 비밀번호 팝업 · 미리보기 닫기 등). */
@@ -32,6 +37,7 @@ export type IdleViewProps = {
 
 export default function IdleView(p: IdleViewProps) {
   const nameRef = useRef<HTMLParagraphElement>(null);
+  const showLookup = p.showLookup ?? true;
 
   // 한 줄에 들어올 때까지 1px 씩 줄인다. 그리기 전에 맞춰 깜빡이지 않는다.
   useLayoutEffect(() => {
@@ -71,8 +77,13 @@ export default function IdleView(p: IdleViewProps) {
         {/* 포인트 조회 — 흰 바탕, 좌우 80 · 위아래 22, 모서리 24, 그림자 */}
         <button
           type="button"
-          onClick={p.onLookup}
-          className="flex items-center justify-center rounded-[24px] bg-white px-[80px] py-[22px] drop-shadow-[0px_8px_7.5px_rgba(13,21,42,0.18)] active:bg-ui-surface"
+          onClick={showLookup ? p.onLookup : undefined}
+          disabled={!showLookup}
+          aria-hidden={!showLookup}
+          tabIndex={showLookup ? undefined : -1}
+          className={`flex items-center justify-center rounded-[24px] bg-white px-[80px] py-[22px] drop-shadow-[0px_8px_7.5px_rgba(13,21,42,0.18)] active:bg-ui-surface ${
+            showLookup ? "" : "invisible"
+          }`}
         >
           <span className="whitespace-nowrap text-center text-[36px] font-medium leading-[1.35] text-ui-text">
             포인트 조회

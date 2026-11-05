@@ -2,13 +2,14 @@ import { useState } from "react";
 import SettingLayout from "./SettingLayout";
 import { useSaveFlow } from "./use-save-flow";
 
-// 포인트 설정 — 최소 포인트 사용 여부 토글 + 최소 사용 포인트 입력.
+// 포인트 설정 — 포인트 조회 기능 사용 여부 토글 + 최소 포인트 사용 여부 토글 + 최소 사용 포인트 입력.
 // PharmPoint Android SettingPointUse 대응.
 //
 // 디자인: Figma 09-3 (미사용, node 26:1071) · '사용' 상태 (node 28:1263).
-// 네이버 · 토스 공용 (src/ui/settings/). 값을 어디에 저장할지는 onSave 를 넘기는 쪽이 정한다.
+// 포인트 조회 기능 사용 여부는 토스에만 있다 (Figma 에 없음 — 아래 항목과 같은 제목 · 토글 모양을 쓴다).
+// 값을 어디에 저장할지는 onSave 를 넘기는 쪽이 정한다.
 
-export type PointSetting = { enabled: boolean; minPoint: number };
+export type PointSetting = { lookupEnabled: boolean; enabled: boolean; minPoint: number };
 
 export default function SettingPointView({
   initial,
@@ -18,22 +19,33 @@ export default function SettingPointView({
   onSave: (v: PointSetting) => void | Promise<void>;
 }) {
   const flow = useSaveFlow(initial, onSave);
+  const [lookupEnabled, setLookupEnabled] = useState(initial.lookupEnabled);
   const [enabled, setEnabled] = useState(initial.enabled);
   const [minPoint, setMinPoint] = useState(initial.minPoint);
 
   const canSave =
-    (enabled !== flow.saved.enabled || minPoint !== flow.saved.minPoint) &&
+    (lookupEnabled !== flow.saved.lookupEnabled ||
+      enabled !== flow.saved.enabled ||
+      minPoint !== flow.saved.minPoint) &&
     (!enabled || minPoint > 0);
 
   return (
     <SettingLayout
       title="포인트 설정"
       canSave={canSave}
-      onSave={() => void flow.save({ enabled, minPoint })}
+      onSave={() => void flow.save({ lookupEnabled, enabled, minPoint })}
       savedToast={flow.savedToast}
     >
-      {/* 최소 포인트 사용 여부 — y=96, 토글 y=130 */}
+      {/* 포인트 조회 기능 사용 여부 — Figma 의 첫 항목 자리(y=96, 토글 y=130) */}
       <p className="mt-[39.6px] whitespace-nowrap text-[18px] font-normal leading-[1.35] tracking-[-0.18px] text-ui-text">
+        포인트 조회 기능 사용 여부
+      </p>
+      <div className="mt-[9.7px]">
+        <ToggleAnimationButton value={lookupEnabled} onChange={setLookupEnabled} />
+      </div>
+
+      {/* 최소 포인트 사용 여부 — 항목 사이 간격은 '최소 사용 포인트' 와 같게 */}
+      <p className="mt-[36px] whitespace-nowrap text-[18px] font-normal leading-[1.35] tracking-[-0.18px] text-ui-text">
         최소 포인트 사용 여부
       </p>
       <div className="mt-[9.7px]">

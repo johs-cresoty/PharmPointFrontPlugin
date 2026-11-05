@@ -102,6 +102,19 @@ export async function setMinPointConfig(enabled: boolean, minPoint: number): Pro
   await writeString(StorageKeys.IS_MIN_POINT_ENABLED, enabled && n > 0);
 }
 
+// ── 포인트 조회 기능 사용 여부 (환경설정 > 포인트 설정) ──
+// 미사용이면 대기화면에 [포인트 조회] 버튼을 보이지 않는다.
+
+export async function isLookupEnabled(): Promise<boolean> {
+  const raw = await readString(StorageKeys.IS_LOOKUP_ENABLED, null);
+  if (raw === null || raw === "") return StorageDefaults.IS_LOOKUP_ENABLED;
+  return raw === "true";
+}
+
+export async function setLookupEnabled(enabled: boolean): Promise<void> {
+  await writeString(StorageKeys.IS_LOOKUP_ENABLED, enabled);
+}
+
 // ── 대기화면 배경 테마 ───────────────────────
 
 export async function getIdleThemeIndex(): Promise<number> {

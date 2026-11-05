@@ -8,6 +8,8 @@ export const StorageKeys = {
   BAUD_RATE:              "settings_baud_rate",
   MIN_POINT:              "settings_min_point",
   IS_MIN_POINT_ENABLED:   "settings_is_min_point_enabled",
+  /** 대기화면 [포인트 조회] 버튼 노출 여부 "true" | "false" */
+  IS_LOOKUP_ENABLED:      "settings_is_lookup_enabled",
   RESULT_TIMEOUT_SECONDS: "settings_result_timeout_seconds",
   INACTIVITY_TIMEOUT_SECONDS: "settings_inactivity_timeout_seconds",
   /** 대기화면 배경 테마 (0~4 = 테마 A~E, src/ui/main-themes) */
@@ -19,6 +21,8 @@ export const StorageKeys = {
 export const StorageDefaults = {
   MIN_POINT:              1000,
   IS_MIN_POINT_ENABLED:   true,
+  /** 설정한 적 없으면 미사용 — 대기화면에 [포인트 조회] 버튼을 보이지 않는다. */
+  IS_LOOKUP_ENABLED:      false,
   RESULT_TIMEOUT_SECONDS: 5,
   INACTIVITY_TIMEOUT_SECONDS: 30,
   IDLE_THEME_INDEX:       0,

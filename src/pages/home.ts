@@ -4,7 +4,7 @@
  * 특수 진입 (CAT_REQUEST_NUM / CAT_REQUEST_CUSTOMER) 은 sessionStorage 로 신호받아
  * phone/customer 입력 서브뷰로 전환.
  */
-import { getIdleThemeIndex, getInactivityTimeoutSeconds, getPointUseConfig } from "../features/app-config/app-config.service";
+import { getIdleThemeIndex, getInactivityTimeoutSeconds, getPointUseConfig, isLookupEnabled } from "../features/app-config/app-config.service";
 import { refreshPriceDisplayTheme } from "./price-display";
 import { setConfig as setAppSessionConfig } from "../features/app-session/app-session.service";
 import { getPointBalance } from "../features/point-inquiry/point-inquiry.service";
@@ -28,6 +28,9 @@ let idleActive = false;
 let idleStoreName: string | null = null;
 // 대기화면 배경 테마 (환경설정 > 테마설정). 0 = 테마A.
 let idleThemeIndex = 0;
+// [포인트 조회] 버튼 노출 (환경설정 > 포인트 설정 > 포인트 조회 기능 사용 여부).
+// 아직 못 읽었으면 null — 읽기 전에는 보이지 않는다(미사용 매장에서 버튼이 잠깐 보였다 사라지지 않게).
+let idleLookupEnabled: boolean | null = null;
 
 // 무동작 타임아웃(설정값 "미동작 시 대기 시간") — 입력/약관 화면이 각자 센다. renderHome 진입 시 갱신.
 let inactivityDuration = 30;
@@ -39,6 +42,7 @@ function drawIdle(): void {
     themeIndex: idleThemeIndex,
     storeName: idleStoreName,
     onLookup: () => { navigate("/member-search"); },
+    showLookup: idleLookupEnabled === true,
     // 관리자 비밀번호 팝업이 떠 있는 동안은 대기 상태가 아니다 — 카트가 와도 가격표시기로 바꾸지 않는다.
     onAdminOpenChange: (open) => { idleActive = !open; },
     onAdminEnter: () => {
@@ -77,6 +81,7 @@ async function syncIdleConfig(): Promise<void> {
   const storeName = await loadStoreName();
   if (storeName) idleStoreName = storeName;
   idleThemeIndex = await getIdleThemeIndex();
+  idleLookupEnabled = await isLookupEnabled();
   if (idleActive) drawIdle();
 
   // 가격표시 테마도 미리 읽어 둔다 — 카트가 오면 기다리지 않고 맞는 테마로 그린다.
