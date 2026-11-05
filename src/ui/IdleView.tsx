@@ -26,7 +26,7 @@ export type IdleViewProps = {
   onLookup: () => void;
   /**
    * [포인트 조회] 버튼을 보일지. 기본 true.
-   * false 면 버튼을 감추고 누를 수 없게 한다. 자리는 그대로 두어 매장명 위치가 바뀌지 않는다.
+   * false 면 버튼을 그리지 않고, 매장명 아랫선을 버튼 아랫선(아래 여백 80)에 맞춘다.
    */
   showLookup?: boolean;
   /** 매장명에 붙일 이벤트 (네이버: 2초 롱프레스 → 관리자). */
@@ -68,27 +68,24 @@ export default function IdleView(p: IdleViewProps) {
             {...p.storeNameProps}
             onContextMenu={(e) => e.preventDefault()}
             className="w-full overflow-hidden whitespace-nowrap px-[24px] text-center font-normal leading-[1.2] text-white"
-            style={{ fontSize: STORE_NAME_MAX_PX, marginBottom: p.storeNameGap ?? 25.4 }}
+            style={{ fontSize: STORE_NAME_MAX_PX, marginBottom: showLookup ? (p.storeNameGap ?? 25.4) : 0 }}
           >
             {p.storeName}
           </p>
         )}
 
         {/* 포인트 조회 — 흰 바탕, 좌우 80 · 위아래 22, 모서리 24, 그림자 */}
-        <button
-          type="button"
-          onClick={showLookup ? p.onLookup : undefined}
-          disabled={!showLookup}
-          aria-hidden={!showLookup}
-          tabIndex={showLookup ? undefined : -1}
-          className={`flex items-center justify-center rounded-[24px] bg-white px-[80px] py-[22px] drop-shadow-[0px_8px_7.5px_rgba(13,21,42,0.18)] active:bg-ui-surface ${
-            showLookup ? "" : "invisible"
-          }`}
-        >
-          <span className="whitespace-nowrap text-center text-[36px] font-medium leading-[1.35] text-ui-text">
-            포인트 조회
-          </span>
-        </button>
+        {showLookup && (
+          <button
+            type="button"
+            onClick={p.onLookup}
+            className="flex items-center justify-center rounded-[24px] bg-white px-[80px] py-[22px] drop-shadow-[0px_8px_7.5px_rgba(13,21,42,0.18)] active:bg-ui-surface"
+          >
+            <span className="whitespace-nowrap text-center text-[36px] font-medium leading-[1.35] text-ui-text">
+              포인트 조회
+            </span>
+          </button>
+        )}
       </div>
 
       {p.children}
