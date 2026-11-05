@@ -58,7 +58,7 @@ export default function SettingPointView({
           <p className="mt-[36px] whitespace-nowrap text-[18px] font-normal leading-[1.35] tracking-[-0.18px] text-ui-text">
             최소 사용 포인트
           </p>
-          <div className="relative mt-[9.7px] h-[46px] w-[232px] overflow-hidden rounded-[12px] border-[1.5px] border-ui-border">
+          <div className="relative mt-[9.7px] h-[46px] w-[236px] overflow-hidden rounded-[12px] border-[1.5px] border-ui-border">
             <input
               type="text"
               inputMode="numeric"
@@ -69,10 +69,11 @@ export default function SettingPointView({
               }}
               placeholder="0"
               aria-label="최소 사용 포인트"
-              className="absolute inset-0 bg-transparent pl-[12px] pr-[32.5px] text-right text-[18px] font-medium leading-[1.5] tracking-[-0.54px] text-ui-text outline-none placeholder:text-ui-text-sub"
+              className="absolute inset-0 bg-transparent pl-[12px] pr-[38px] text-right text-[18px] font-medium leading-[1.5] tracking-[-0.54px] text-ui-text outline-none placeholder:text-ui-text-sub"
             />
-            {/* 단위 — Figma 기준 칸 왼쪽에서 207 위치에 가운데 맞춤 */}
-            <span className="pointer-events-none absolute left-[207px] top-1/2 -translate-x-1/2 -translate-y-1/2 text-[16px] font-medium leading-[1.5] tracking-[-0.48px] text-ui-text-sub">
+            {/* 숫자 오른쪽 끝 · 단위 가운데 — Figma 칸 바깥 왼쪽에서 196.5 · 207.
+                absolute 기준은 테두리(1.5) 안쪽이라 1.5 를 빼서 둔다 (오른쪽 여백 236-3-196.5+1.5=38, 단위 205.5). */}
+            <span className="pointer-events-none absolute left-[205.5px] top-1/2 -translate-x-1/2 -translate-y-1/2 text-[16px] font-medium leading-[1.5] tracking-[-0.48px] text-ui-text-sub">
               P
             </span>
           </div>
