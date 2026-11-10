@@ -162,7 +162,7 @@ async function bootstrap(): Promise<void> {
     },
     onCatDisconnect: () => { navigate("/"); },
 
-    // 고객 가격표시기 — catpos-cart-display-spec.md 참고.
+    // 고객 가격표시기 — 캣포스 CART_UPDATE(catpos-cart-display-spec.md) · 단말기 007(cat-cart-display-spec.md) 공용.
     onCartUpdate: (cart) => {
       const amount = `${(cart.total || 0).toLocaleString()}원 ${cart.items.length}건`;
 

@@ -26,6 +26,7 @@ import type {
   CatEventPayload,
   TerminalEventPayload,
   TerminalBarcodePayload,
+  TerminalCartPayload,
 } from "../../pos/socket-gateway";
 import type { BarcodeDisplayData } from "../../pos/protocol/terminal-codec";
 import { parseCartData, type CartData } from "../../pos/cart-types";
@@ -61,9 +62,9 @@ export type AppSessionHandlers = {
   onNavigateToUsePoint?:   (args: NavigateUsePointArgs) => void;
   onNavigateToCatRequest?: (args: NavigateCatRequestArgs) => void;
   onCatDisconnect?:        () => void;
-  /** CART_UPDATE — 첫 수신 시 가격표시기 진입, 이후 실시간 갱신. */
+  /** CART_UPDATE · 단말기 007 — 첫 수신 시 가격표시기 진입, 이후 실시간 갱신. */
   onCartUpdate?:           (cart: CartData) => void;
-  /** CART_CLEAR — 결제 개시 직전. 대기화면으로 복귀. */
+  /** CART_CLEAR · 단말기 008 — 결제 개시 직전. 대기화면으로 복귀. */
   onCartClear?:            () => void;
   /** TRM 005 — 바코드 표시 요청. 화면 진입 후 006 회신은 세션이 담당. */
   onBarcodeDisplay?:       (barcode: BarcodeDisplayData) => void;
@@ -122,7 +123,7 @@ export function start(handlers: AppSessionHandlers = {}): void {
   const E = SocketEvent;
   const reg = (
     event: string,
-    fn: (payload: CatEventPayload | TerminalEventPayload | TerminalBarcodePayload) => void,
+    fn: (payload: CatEventPayload | TerminalEventPayload | TerminalBarcodePayload | TerminalCartPayload) => void,
   ) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     unsubscribes.push(SocketGateway.on(event as any, fn));
@@ -172,6 +173,17 @@ export function start(handlers: AppSessionHandlers = {}): void {
   // 999 — 화면 미노출 요청. 응답 전문은 없다(게이트웨이 자동 ACK 로 끝).
   reg(E.TerminalHideScreen, () => {
     handlers.onTerminalHideScreen?.();
+  });
+
+  // 007 · 008 — 단말기 가격표시기. 응답 전문은 없다(게이트웨이 자동 ACK 로 끝).
+  // 화면 처리는 캣포스 CART_UPDATE · CART_CLEAR 와 같다.
+  reg(E.TerminalCartUpdate, (payload) => {
+    const { cart } = payload as TerminalCartPayload;
+    handlers.onCartUpdate?.(cart);
+  });
+
+  reg(E.TerminalCartClear, () => {
+    handlers.onCartClear?.();
   });
 
   // ── CAT ──────────────────────────────────

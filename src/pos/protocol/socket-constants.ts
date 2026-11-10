@@ -13,6 +13,8 @@ export const SocketConstants = {
   TERMINAL_COMMAND_004: "004", // TRM ← PAD : 포인트 사용 응답
   TERMINAL_COMMAND_005: "005", // TRM → PAD : 바코드 표시 요청
   TERMINAL_COMMAND_006: "006", // TRM ← PAD : 바코드 표시 응답
+  TERMINAL_COMMAND_007: "007", // TRM → PAD : 장바구니 (가격표시기, cat-cart-display-spec.md). 응답 전문 없음(ACK 만)
+  TERMINAL_COMMAND_008: "008", // TRM → PAD : 장바구니 비우기. 응답 전문 없음(ACK 만)
   TERMINAL_COMMAND_010: "010", // PAD → TRM : 취소
   TERMINAL_COMMAND_999: "999", // TRM → PAD : 화면 미노출(팜포인트 화면 종료). 응답 전문 없음(ACK 만)
 

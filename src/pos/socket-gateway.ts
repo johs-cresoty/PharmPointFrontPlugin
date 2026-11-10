@@ -17,6 +17,8 @@ import { SocketConstants as C } from "./protocol/socket-constants";
 import { SocketEvent, type SocketEventType } from "./socket-events";
 import * as CatposCodec from "./protocol/catpos-codec";
 import * as TerminalCodec from "./protocol/terminal-codec";
+import { createCartAssembler, parseCartPage } from "./terminal-cart";
+import type { CartData } from "./cart-types";
 import { createWebSocketTransport, type WebSocketTransport } from "./transport/websocket-transport";
 import { createSerialTransport, toHexMasked, type SerialTransport } from "./transport/serial-transport";
 import { createVanTransport, type VanTransport } from "./transport/van-transport";
@@ -43,10 +45,16 @@ export type TerminalBarcodePayload = {
   barcode: TerminalCodec.BarcodeDisplayData;
 };
 
+/** 007 전용 — 페이지를 모두 모은 장바구니. */
+export type TerminalCartPayload = {
+  cart: CartData;
+};
+
 type AnyPayload =
   | CatEventPayload
   | TerminalEventPayload
-  | TerminalBarcodePayload;
+  | TerminalBarcodePayload
+  | TerminalCartPayload;
 
 type EventListener = (payload: AnyPayload) => void;
 
@@ -127,6 +135,8 @@ function create() {
   let van: VanTransport       | null = null;
   // 팜포인트 전문이 한 번이라도 도착했는지. 연동 성립을 1회만 알리기 위한 표식.
   let trmLinkConfirmed = false;
+  // 단말기 007 — 여러 페이지로 나뉘어 오는 장바구니를 모은다.
+  const cartAssembler = createCartAssembler();
 
   // ── CATPOS JSON 수신 처리 ──────────────────────
   function onCatText(text: string): void {
@@ -208,6 +218,18 @@ function create() {
       return;
     }
 
+    // 007 · 008 — 가격표시기. 화면에 어떻게 반영됐는지는 main.ts 가 [팜포인트·장바구니] 한 줄로 남긴다
+    // (캣포스 장바구니와 같은 방식). 여기서는 반영 전에 걸러진 경우만 남긴다.
+    if (parsed.cmd === C.TERMINAL_COMMAND_007) {
+      onTerminalCartPage(parsed.fields, label);
+      return;
+    }
+    if (parsed.cmd === C.TERMINAL_COMMAND_008) {
+      cartAssembler.reset();
+      bus.emit(SocketEvent.TerminalCartClear, { fields: parsed.fields, raw: parsed.raw });
+      return;
+    }
+
     const event = mapTerminalCommandToEvent(parsed.cmd);
     if (event) log.status(`[단말기] ${label} 보냄`);
     // 필드는 커맨드마다 구성이 달라 키 기반으로 가릴 수 없다. 값 패턴으로 번호만 가린다.
@@ -220,6 +242,24 @@ function create() {
       return;
     }
     bus.emit(event, { fields: parsed.fields, raw: parsed.raw });
+  }
+
+  // ── 단말기 007 (장바구니) 페이지 조립 ─────────
+  function onTerminalCartPage(fields: string[], label: string): void {
+    const parsedPage = parseCartPage(fields);
+    if (!parsedPage.ok) {
+      log.status(`[단말기] ${label} 보냄 → 무시 — 전문 형식이 명세와 다름: ${parsedPage.reason} · 확인 필요: 단말기`);
+      return;
+    }
+    const r = cartAssembler.add(parsedPage.page);
+    if (r.dropped) {
+      log.status(`[단말기] ${r.dropped} → 버림 — 나머지 페이지가 오기 전에 다른 장바구니(${r.cartNo})가 옴`);
+    }
+    if (!r.cart) {
+      log.status(`[단말기] ${label} ${r.cartNo} 페이지 ${parsedPage.page.page}/${r.totalPages} 받음 → 나머지 기다림(${r.received}/${r.totalPages} 도착)`);
+      return;
+    }
+    bus.emit(SocketEvent.TerminalCartUpdate, { cart: r.cart });
   }
 
   // ── 단말(시리얼) → VAN 결제모듈 중계 ──────────
@@ -288,6 +328,7 @@ function create() {
   async function stop(): Promise<void> {
     van = null;
     trmLinkConfirmed = false;
+    cartAssembler.reset();
     await Promise.allSettled([
       ws  ? ws.stop()  : Promise.resolve(),
       ser ? ser.stop() : Promise.resolve(),

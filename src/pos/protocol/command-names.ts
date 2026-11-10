@@ -38,6 +38,8 @@ const TERMINAL_NAMES: Record<string, string> = {
   [C.TERMINAL_COMMAND_004]: "포인트 사용 결과",
   [C.TERMINAL_COMMAND_005]: "바코드 표시 요청",
   [C.TERMINAL_COMMAND_006]: "바코드 표시 응답",
+  [C.TERMINAL_COMMAND_007]: "장바구니",
+  [C.TERMINAL_COMMAND_008]: "장바구니 비우기",
   [C.TERMINAL_COMMAND_010]: "진행 취소",
   [C.TERMINAL_COMMAND_999]: "화면 닫기 요청",
 };

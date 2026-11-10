@@ -12,6 +12,8 @@ export const SocketEvent = {
   TerminalUsePoint:         "TERMINAL_USE_POINT",           // 003
   TerminalBarcodeDisplay:   "TERMINAL_BARCODE_DISPLAY",     // 005
   TerminalHideScreen:       "TERMINAL_HIDE_SCREEN",         // 999
+  TerminalCartUpdate:       "TERMINAL_CART_UPDATE",         // 007 — 한 장바구니의 페이지가 모두 도착
+  TerminalCartClear:        "TERMINAL_CART_CLEAR",          // 008
 
   // ── 캣포스(CAT) 전문 ─────────────────────────
   CatConnect:              "CAT_CONNECT",                   // CONNECT
