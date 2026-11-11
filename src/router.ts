@@ -16,6 +16,8 @@
  * - 웹뷰의 뒤로가기(back) 는 hash 변경 스택을 자연스럽게 처리 (pushState 대비 안정적).
  */
 
+import { reportCaughtError } from "./monitoring/sentry";
+
 export type RouteParams = Record<string, string>;
 
 export type Route = {
@@ -91,7 +93,9 @@ async function handleRoute(): Promise<void> {
       await result;
     }
   } catch (e) {
+    // 화면을 그리다 실패하면 화면이 안 뜨거나 멈춘다. 잡아서 넘기므로 직접 올린다.
     console.error("[Router] render 실패", e);
+    reportCaughtError("화면 그리기", e, `path=${path}`);
   }
 }
 

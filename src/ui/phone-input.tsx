@@ -34,6 +34,7 @@ import {
 import { InactivityPopup, NetworkErrorPopup, PointUnavailablePopup, ServerErrorPopup } from "./Popups";
 import { showScreen } from "./stage";
 import { useInactivity } from "./use-inactivity";
+import { reportCaughtError } from "../monitoring/sentry";
 
 export type PhoneSubmitOutcome = "done" | "notFound" | "network" | "server";
 
@@ -146,6 +147,8 @@ function PhoneInputScreen(o: PhoneInputOptions) {
       } catch (e) {
         console.error("[PhoneInput] 회원 확인 실패:", e);
         outcome = isUnreachable(e) ? "network" : "server";
+        // 서버에 닿지 못한 경우(약국 네트워크)는 올리지 않는다 — 코드 · 서버 문제가 아니고 건수만 쌓인다.
+        if (outcome === "server") reportCaughtError("번호 입력 · 회원 확인", e);
       }
       setLoading(false);
       if (outcome === "notFound") {
@@ -184,6 +187,8 @@ function PhoneInputScreen(o: PhoneInputOptions) {
     } catch (e) {
       console.error("[PhoneInput] 처리 실패:", e);
       outcome = isUnreachable(e) ? "network" : "server";
+      // 서버에 닿지 못한 경우(약국 네트워크)는 올리지 않는다 — 코드 · 서버 문제가 아니고 건수만 쌓인다.
+      if (outcome === "server") reportCaughtError("동의 처리 완료 · 처리", e);
     }
     if (outcome === "done") return; // 다음 화면이 덮는다. 처리 중 표시는 그대로 둔다.
     setLoading(false);

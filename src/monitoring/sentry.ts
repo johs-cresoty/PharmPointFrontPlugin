@@ -85,6 +85,22 @@ export function reportLinkFailure(message: string, detail?: unknown): void {
 }
 
 /**
+ * try/catch 로 잡아 넘긴 예외를 Sentry 에 올린다.
+ *
+ * 잡아서 넘기면 화면은 버티지만, Sentry 에는 breadcrumb(console.error)으로만 남아
+ * 다른 오류가 터지거나 진단을 보내기 전까지 아무도 모른다. 잡는 곳에서 직접 올린다.
+ * area 는 어디서 잡았는지 — Sentry 에서 태그 `area:...` 로 검색한다.
+ * 번호 등 개인정보는 전송 직전 scrub 이 한 번 더 지운다.
+ */
+export function reportCaughtError(area: string, e: unknown, detail?: string): void {
+  if (!SENTRY_DSN) return;
+  Sentry.captureException(e, {
+    tags:  { area },
+    extra: detail === undefined ? undefined : { detail },
+  });
+}
+
+/**
  * 연동 기록 한 칸에 담을 글자 수.
  *
  * Sentry 는 값 하나가 길면 뒤를 잘라낸다. 기록은 오래된 줄부터 쌓여 있어서, 통째로 한 칸에

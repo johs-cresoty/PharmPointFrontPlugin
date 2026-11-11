@@ -9,6 +9,7 @@ import { getCustomer, inquiryFailureNote } from "../features/point-inquiry/point
 import { isUnreachable, type MemberCheckOutcome } from "../ui/phone-input";
 import { log } from "../utils/log";
 import { maskPhone } from "../utils/pii-mask";
+import { reportCaughtError } from "../monitoring/sentry";
 
 export async function checkMember(phone: string, flow: "조회" | "사용"): Promise<MemberCheckOutcome> {
   try {
@@ -24,6 +25,8 @@ export async function checkMember(phone: string, flow: "조회" | "사용"): Pro
       ` · 확인 필요: ${unreachable ? "네트워크(통신)" : "서버(API)"}`,
     );
     console.error("[member-check] 회원 확인 실패:", err);
+    // 서버에 닿지 못한 경우(약국 네트워크)는 올리지 않는다 — 진단 기록 한 줄로 충분하다.
+    if (!unreachable) reportCaughtError(`회원 확인(${flow})`, err);
     return unreachable ? "network" : "server";
   }
 }

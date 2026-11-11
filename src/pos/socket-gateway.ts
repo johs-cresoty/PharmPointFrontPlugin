@@ -24,7 +24,7 @@ import { createSerialTransport, toHexMasked, type SerialTransport } from "./tran
 import { createVanTransport, type VanTransport } from "./transport/van-transport";
 import { maskPiiText } from "../utils/pii-mask";
 import { log } from "../utils/log";
-import { reportLinkFailure } from "../monitoring/sentry";
+import { reportCaughtError, reportLinkFailure } from "../monitoring/sentry";
 import { noteTerminalFrame, setLinkStatus } from "../monitoring/link-status";
 import { catCommandLabel, terminalCommandLabel } from "./protocol/command-names";
 import { SocketConfig } from "./socket-config";
@@ -47,7 +47,9 @@ export type TerminalBarcodePayload = {
 
 /** 007 전용 — 페이지를 모두 모은 장바구니. */
 export type TerminalCartPayload = {
-  cart: CartData;
+  cart:   CartData;
+  /** 장바구니 번호(4자리) — 진단 기록에서 어느 007 인지 가르기 위함. */
+  cartNo: string;
 };
 
 type AnyPayload =
@@ -78,7 +80,11 @@ function createEmitter() {
     if (!set) return;
     for (const fn of set) {
       try { fn(payload); }
-      catch (e) { console.error("[SocketGateway] listener error", e); }
+      catch (e) {
+        // 화면 전환 · 회신 처리 중 오류. 잡아서 넘기므로 직접 올리지 않으면 Sentry 에 안 남는다.
+        console.error("[SocketGateway] listener error", e);
+        reportCaughtError("소켓 이벤트 처리", e, `event=${event}`);
+      }
     }
   }
 
@@ -259,7 +265,7 @@ function create() {
       log.status(`[단말기] ${label} ${r.cartNo} 페이지 ${parsedPage.page.page}/${r.totalPages} 받음 → 나머지 기다림(${r.received}/${r.totalPages} 도착)`);
       return;
     }
-    bus.emit(SocketEvent.TerminalCartUpdate, { cart: r.cart });
+    bus.emit(SocketEvent.TerminalCartUpdate, { cart: r.cart, cartNo: r.cartNo });
   }
 
   // ── 단말(시리얼) → VAN 결제모듈 중계 ──────────
@@ -282,7 +288,11 @@ function create() {
     ser = createSerialTransport({
       onFrame:      onSerialFrame,  // TRM(팜포인트) 완성 프레임 → 우리 처리
       onVanForward: onVanForward,   // TRM 아닌 원본(KIS 등) → VAN 중계
-      onError: (e) => console.error("[SocketGateway] serial error", e),
+      onError: (e) => {
+        // 시리얼 수신 · 프레임 처리 중 오류(통신 오류가 아니라 처리 코드 오류).
+        console.error("[SocketGateway] serial error", e);
+        reportCaughtError("시리얼 처리", e);
+      },
     });
     van = createVanTransport(); // KIS 전문 → VAN 전달 (write only)
 

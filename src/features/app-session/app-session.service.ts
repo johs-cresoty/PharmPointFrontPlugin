@@ -62,10 +62,13 @@ export type AppSessionHandlers = {
   onNavigateToUsePoint?:   (args: NavigateUsePointArgs) => void;
   onNavigateToCatRequest?: (args: NavigateCatRequestArgs) => void;
   onCatDisconnect?:        () => void;
-  /** CART_UPDATE · 단말기 007 — 첫 수신 시 가격표시기 진입, 이후 실시간 갱신. */
-  onCartUpdate?:           (cart: CartData) => void;
-  /** CART_CLEAR · 단말기 008 — 결제 개시 직전. 대기화면으로 복귀. */
-  onCartClear?:            () => void;
+  /**
+   * CART_UPDATE · 단말기 007 — 첫 수신 시 가격표시기 진입, 이후 실시간 갱신.
+   * source 는 진단 기록에 남길 출처 — "캣포스" 또는 "단말기 0012"(장바구니 번호).
+   */
+  onCartUpdate?:           (cart: CartData, source: string) => void;
+  /** CART_CLEAR · 단말기 008 — 결제 개시 직전. 대기화면으로 복귀. source 는 "캣포스" 또는 "단말기". */
+  onCartClear?:            (source: string) => void;
   /** TRM 005 — 바코드 표시 요청. 화면 진입 후 006 회신은 세션이 담당. */
   onBarcodeDisplay?:       (barcode: BarcodeDisplayData) => void;
   /** TRM 999 — 화면 미노출 요청. 단말기 유래 화면만 닫는다. */
@@ -178,12 +181,12 @@ export function start(handlers: AppSessionHandlers = {}): void {
   // 007 · 008 — 단말기 가격표시기. 응답 전문은 없다(게이트웨이 자동 ACK 로 끝).
   // 화면 처리는 캣포스 CART_UPDATE · CART_CLEAR 와 같다.
   reg(E.TerminalCartUpdate, (payload) => {
-    const { cart } = payload as TerminalCartPayload;
-    handlers.onCartUpdate?.(cart);
+    const { cart, cartNo } = payload as TerminalCartPayload;
+    handlers.onCartUpdate?.(cart, `단말기 ${cartNo}`);
   });
 
   reg(E.TerminalCartClear, () => {
-    handlers.onCartClear?.();
+    handlers.onCartClear?.("단말기");
   });
 
   // ── CAT ──────────────────────────────────
@@ -247,11 +250,11 @@ export function start(handlers: AppSessionHandlers = {}): void {
   reg(E.CatCartUpdate, (payload) => {
     const { data } = payload as CatEventPayload;
     const cart = parseCartData(data);
-    handlers.onCartUpdate?.(cart);
+    handlers.onCartUpdate?.(cart, "캣포스");
   });
 
   reg(E.CatCartClear, () => {
-    handlers.onCartClear?.();
+    handlers.onCartClear?.("캣포스");
   });
 
   SocketGateway.start().catch((e) => console.error("[AppSession] socket start fail", e));
