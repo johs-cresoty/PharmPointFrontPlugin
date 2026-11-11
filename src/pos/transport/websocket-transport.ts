@@ -147,10 +147,8 @@ export function createWebSocketTransport({ onText, onError }: WebSocketTransport
         }, CATPOS_DROP_GRACE_MS);
       },
 
-      onError: (payload) => {
-        console.error("[WS] 에러", payload);
-        onError?.(payload);
-      },
+      // 기록은 받는 쪽(SocketGateway)이 한 번만 남긴다. 여기서도 남기면 같은 오류가 두 줄이 된다.
+      onError: (payload) => onError?.(payload),
     });
   }
 

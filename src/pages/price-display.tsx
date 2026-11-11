@@ -10,7 +10,7 @@
  *   - 이후 CART_UPDATE 수신 시 main 이 updatePriceDisplay(cart) 를 호출해 실시간 갱신.
  */
 import { navigate, onCleanup } from "../router";
-import type { CartData } from "../pos/cart-types";
+import { hasCartToShow, type CartData } from "../pos/cart-types";
 import { getPriceDisplayTheme, type PriceDisplayTheme } from "../features/app-config/app-config.service";
 import PriceDisplayView from "../ui/PriceDisplayView";
 import { hideScreen, showScreen } from "../ui/stage";
@@ -67,9 +67,10 @@ export function updatePriceDisplay(cart: CartData): void {
 
 export async function renderPriceDisplay(): Promise<void> {
   const cart = loadCart();
-  // 카트 스냅샷이 없거나 상품이 비어 있으면 가격표시기에 진입하지 않고 대기화면 유지.
-  // (POS 명세상 CART_UPDATE 는 items 가 있을 때만 오지만, 라우터 직접 진입/새로고침 등의 경로도 방어.)
-  if (!cart || cart.items.length === 0) {
+  // 카트 스냅샷이 없거나 띄울 내용이 없으면 가격표시기에 진입하지 않고 대기화면 유지.
+  // (POS 명세상 CART_UPDATE 는 items 가 있을 때만 오지만, 라우터 직접 진입/새로고침 등의 경로도 방어.
+  //  CAT 단말기 007 은 품목 없이 금액만 있어도 띄운다 — hasCartToShow)
+  if (!cart || !hasCartToShow(cart)) {
     clearCart();
     navigate("/");
     return;

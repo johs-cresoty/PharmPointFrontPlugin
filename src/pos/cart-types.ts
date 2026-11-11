@@ -32,6 +32,20 @@ export type CartData = {
   newestFirst?:      boolean;
 };
 
+/**
+ * 가격표시기에 띄울 내용이 있는지.
+ *   - 품목이 있으면 띄운다.
+ *   - CAT 단말기 007(newestFirst = true)은 품목 없이 조제 · 추가 · 할인 금액만 입력해도 띄운다.
+ *     품목 0개에 금액도 모두 0이면 빈 장바구니다(008 과 같음). — cat-cart-display-spec.md
+ *   - 캣포스는 품목이 없으면 빈 장바구니다(모든 상품 삭제 등).
+ */
+export function hasCartToShow(cart: CartData): boolean {
+  if (cart.items.length > 0) return true;
+  if (cart.newestFirst !== true) return false;
+  return [cart.dispenseAmount, cart.subtotal, cart.extraAmount, cart.discountAmount, cart.expectedEarnPoint, cart.total]
+    .some((v) => v !== 0);
+}
+
 // ─── 파싱 유틸 (수신 raw JSON → CartData) ───
 
 function toNum(v: unknown): number {

@@ -21,6 +21,8 @@ import { renderPointUseWithCustomerFlow } from "./pages/point-use-with-customer-
 import { renderResult } from "./pages/result";
 import { renderSettings } from "./pages/settings";
 import { renderPriceDisplay, saveCart, clearCart, updatePriceDisplay } from "./pages/price-display";
+import { hasCartToShow } from "./pos/cart-types";
+import { describeCartDisplay } from "./ui/PriceDisplayView";
 import { renderBarcodeDisplay, saveBarcode, clearBarcode } from "./pages/barcode-display";
 import { log } from "./utils/log";
 import { onSettingsVisit } from "./monitoring/settings-visit";
@@ -165,16 +167,18 @@ async function bootstrap(): Promise<void> {
     // 고객 가격표시기 — 캣포스 CART_UPDATE(catpos-cart-display-spec.md) · 단말기 007(cat-cart-display-spec.md) 공용.
     // 로그의 괄호 안은 출처 — 캣포스(CART_UPDATE) 인지 단말기(007, 장바구니 번호) 인지.
     onCartUpdate: (cart, source) => {
-      const amount = `${(cart.total || 0).toLocaleString()}원 ${cart.items.length}건`;
+      // 합계와 함께, 화면이 이 장바구니를 어떻게 그렸는지(표시 줄 · 품목 수 · 강조 위치 · 화면 형태)를 남긴다.
+      const amount = `${(cart.total || 0).toLocaleString()}원 · ${describeCartDisplay(cart)}`;
 
       // 빈 카트(모든 상품 삭제 등)는 대기화면으로 복귀 처리. 가격표시기 유지 안 함.
-      if (cart.items.length === 0) {
+      // CAT 단말기는 품목 없이 금액만 입력한 경우도 빈 카트가 아니다(hasCartToShow).
+      if (!hasCartToShow(cart)) {
         clearCart();
         if (getCurrentPath() === "/price-display") {
           navigate("/");
-          log.status(`[팜포인트·장바구니] 갱신(${source}) → 가격표시 닫음 — 담긴 상품 없음`);
+          log.status(`[팜포인트·장바구니] 갱신(${source}) → 가격표시 닫음 — 담긴 상품 · 입력 금액 없음`);
         } else {
-          log.status(`[팜포인트·장바구니] 갱신(${source}) → 화면 변화 없음 — 담긴 상품 없고 가격표시 중도 아님`);
+          log.status(`[팜포인트·장바구니] 갱신(${source}) → 화면 변화 없음 — 담긴 상품 · 입력 금액 없고 가격표시 중도 아님`);
         }
         return;
       }

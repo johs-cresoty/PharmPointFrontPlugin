@@ -244,7 +244,6 @@ function create() {
     if (!event) {
       // 매핑 안 된 커맨드도 조용히 버리지 않는다 — 미지원 전문이 오는지 로그로 드러나야 한다.
       log.status(`[단말기] ${label} 보냄 → 무시 — 팜포인트가 지원하지 않는 커맨드`);
-      console.warn(`[SocketGateway] TRM 미지원 커맨드 — cmd=${parsed.cmd} (무시)`);
       return;
     }
     bus.emit(event, { fields: parsed.fields, raw: parsed.raw });
