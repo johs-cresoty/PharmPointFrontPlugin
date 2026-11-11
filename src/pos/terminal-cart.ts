@@ -14,7 +14,7 @@
  */
 import type { CartData, CartItem } from "./cart-types";
 
-type CartAmounts = Omit<CartData, "items">;
+type CartAmounts = Omit<CartData, "items" | "newestFirst">;
 
 export type TerminalCartPage = {
   cartNo:     string;
@@ -147,7 +147,8 @@ export function createCartAssembler() {
 
     const items: CartItem[] = [];
     for (let i = 1; i <= p.totalPages; i++) items.push(...(pages.get(i) ?? []));
-    const cart: CartData = { ...p.amounts, items };
+    // CAT 단말기는 최근 스캔 상품을 맨 앞에 담아 보낸다. 순서는 바꾸지 않고 화면에 그 사실만 알린다.
+    const cart: CartData = { ...p.amounts, items, newestFirst: true };
     reset();
     return { cart, cartNo: p.cartNo, received, totalPages: p.totalPages, dropped };
   }

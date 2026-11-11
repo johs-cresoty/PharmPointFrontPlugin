@@ -28,6 +28,8 @@ export type CartData = {
   expectedEarnPoint: number;
   /** 합계(원) — POS 가 계산한 최종 청구액이 기준값 */
   total:             number;
+  /** 맨 앞이 최근 스캔 상품인지. CAT 단말기 007 만 true (단말기가 최신순으로 보낸다). 캣포스는 없음(맨 뒤가 최신). */
+  newestFirst?:      boolean;
 };
 
 // ─── 파싱 유틸 (수신 raw JSON → CartData) ───

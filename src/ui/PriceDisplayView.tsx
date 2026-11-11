@@ -29,18 +29,27 @@ export type PriceDisplayData = {
   expectedEarnPoint: number;
   /** 합계(원) */
   total: number;
+  /**
+   * 품목 순서. true 면 맨 앞이 최근 스캔 상품이다(CAT 단말기 007 — 단말기가 최신순으로 보낸다).
+   * 없거나 false 면 맨 뒤가 최근 스캔 상품이다(캣포스 CART_UPDATE).
+   * 어느 쪽이든 받은 순서 그대로 그리고, 최근 상품을 강조하고 그 자리로 스크롤한다.
+   */
+  newestFirst?: boolean;
 };
 
 const won = (n: number): string => `${n.toLocaleString()}원`;
 
 export default function PriceDisplayView({ data, dark }: { data: PriceDisplayData; dark: boolean }) {
-  // 최근 스캔 상품(강조 행)이 항상 보이도록 상품 목록 컨테이너를 하단으로 자동 스크롤.
+  // 최근 스캔 상품(강조 행)이 항상 보이도록 상품 목록을 자동 스크롤한다.
+  //   캣포스(맨 뒤가 최신) → 맨 아래로, CAT 단말기(맨 앞이 최신) → 맨 위로.
   // 카트가 바뀔 때마다 새 data 로 리렌더되므로 상품 배열 참조를 의존성에 둔다.
+  const newestFirst = data.newestFirst === true;
   const listRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [data.items]);
+    if (el) el.scrollTop = newestFirst ? 0 : el.scrollHeight;
+  }, [data.items, newestFirst]);
+  const newestIndex = newestFirst ? 0 : data.items.length - 1;
 
   return (
     <div
@@ -83,7 +92,7 @@ export default function PriceDisplayView({ data, dark }: { data: PriceDisplayDat
 
         {/* 상품 목록 (많으면 스크롤).
             스크롤바는 숨긴다. 디자인에 없고, 고객 화면이라 손님이 직접 스크롤하지 않는다.
-            CART_UPDATE 마다 맨 아래로 자동 스크롤하는데, 그때마다 막대가 번쩍이는 것도 막는다. */}
+            카트가 바뀔 때마다 최근 상품 쪽으로 자동 스크롤하는데, 그때마다 막대가 번쩍이는 것도 막는다. */}
         <div
           ref={listRef}
           className="mx-[24px] mb-[46px] mt-[21px] flex min-h-0 flex-1 flex-col gap-[16px] overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -95,7 +104,7 @@ export default function PriceDisplayView({ data, dark }: { data: PriceDisplayDat
               unitPrice={it.unitPrice}
               quantity={it.quantity}
               amount={it.amount}
-              highlight={i === data.items.length - 1} // 최근 스캔 상품 강조
+              highlight={i === newestIndex} // 최근 스캔 상품 강조
             />
           ))}
         </div>
