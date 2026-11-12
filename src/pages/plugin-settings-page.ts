@@ -138,7 +138,8 @@ export async function renderPluginSettingsPage(): Promise<void> {
       return;
     }
     sending = true;
-    label.textContent = "보내는 중…";
+    // 진단이 크면(약 60KB 초과) 화면이 열려 있는 동안만 전송된다(sentry.ts keepalive 참고). 끝날 때까지 머물게 안내한다.
+    label.textContent = "보내는 중… 화면을 닫지 마세요";
     const { ok, detail } = await pending;
     sending = false;
     if (ok) {
