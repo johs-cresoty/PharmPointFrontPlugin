@@ -138,6 +138,106 @@ function linkLogExtra(lines: string[]): Record<string, string> {
 const DIAGNOSTIC_COOLDOWN_MS = 60_000;
 let lastDiagnosticAt = 0;
 
+// ── 진단 전송 결과 확인 ────────────────────────────────
+//
+// SDK 는 전송에 실패해도 아무것도 남기지 않는다(디버그 빌드가 아니면 콘솔에도 안 찍힌다).
+// 그래서 예전에는 "보냈습니다" 가 떠도 실제로 Sentry 에 닿았는지 알 수 없었다.
+// 진단 이벤트 하나에 대해서만 실제 결과(서버 응답 코드 · 실패 사유 · 보낸 크기)를 받아 화면과 콘솔에 보여준다.
+
+/** 진단 보내기 결과. detail 은 화면 문구 · 콘솔에 그대로 쓴다 (개인정보 없음 — 코드 · 사유 · 크기뿐). */
+export type DiagnosticOutcome = { ok: boolean; detail: string };
+
+/** 결과를 기다리는 진단 이벤트 — event_id → 결과 알림. */
+const diagWaiters = new Map<string, (outcome: DiagnosticOutcome) => void>();
+/** 진단 이벤트가 SDK 처리를 통과해 전송 단계로 넘어갔는지 (event_id). */
+const diagHandedToTransport = new Set<string>();
+/** 진단 이벤트 요청의 크기 · 실패 사유. afterSendEvent 는 실패 사유를 넘겨주지 않아 여기서 적는다. */
+const diagRequestNotes = new Map<string, string>();
+
+// Sentry.init 이 fetch 를 감싸기 전의 원본. 전송 요청이 breadcrumb 으로 다시 잡히지 않게 원본을 쓴다.
+const nativeFetch: typeof fetch = window.fetch.bind(window);
+
+/** 전송 본문(envelope) 첫 줄의 event_id. */
+function envelopeEventId(body: unknown): string | null {
+  let head = "";
+  if (typeof body === "string") head = body.slice(0, 300);
+  else if (body instanceof Uint8Array) head = new TextDecoder().decode(body.subarray(0, 300));
+  return /"event_id":"([0-9a-f]{32})"/.exec(head)?.[1] ?? null;
+}
+
+/** 전송 본문의 실제 크기(바이트). */
+function bodyBytes(body: unknown): number {
+  if (typeof body === "string") return new TextEncoder().encode(body).length;
+  if (body instanceof Uint8Array) return body.byteLength;
+  return 0;
+}
+
+/** "98KB · keepalive" — 보낸 크기(바이트)와 keepalive 사용 여부. */
+function requestSizeNote(init: RequestInit | undefined): string {
+  return `${Math.round(bodyBytes(init?.body) / 1024)}KB${init?.keepalive ? " · keepalive" : ""}`;
+}
+
+/**
+ * keepalive 를 켜도 되는 본문 크기(바이트).
+ *
+ * 브라우저는 keepalive 요청 본문이 64KiB 를 넘으면 보내지 않고 바로 실패시킨다(TypeError: Failed to fetch).
+ * SDK 는 이 한도를 '글자 수'(6만)로 따지는데, 한글은 한 글자가 3바이트라 진단처럼 한글 기록이 많으면
+ * 글자 수는 한도 안이어도 실제 바이트는 64KiB 를 넘는다. 그래서 실제 바이트로 다시 따져 끈다.
+ * keepalive 는 화면을 떠나는 순간에도 전송을 이어가게 하는 옵션이라, 끄더라도 화면에 머무는 동안은 그대로 전송된다.
+ */
+const KEEPALIVE_MAX_BYTES = 60_000;
+
+/** keepalive 가 켜져 있는데 본문이 한도를 넘으면 끈 요청 옵션을 돌려준다. 그 밖에는 그대로. */
+function withSafeKeepalive(init: RequestInit | undefined): RequestInit | undefined {
+  if (!init?.keepalive || bodyBytes(init.body) <= KEEPALIVE_MAX_BYTES) return init;
+  return { ...init, keepalive: false };
+}
+
+/**
+ * 전송용 fetch.
+ *   - 모든 요청: 본문이 keepalive 한도를 넘으면 keepalive 를 끈다.
+ *   - 진단 이벤트 요청: 크기와 실패 사유를 적는다.
+ */
+const trackedFetch: typeof fetch = async (input, rawInit) => {
+  const init = withSafeKeepalive(rawInit);
+  const id = envelopeEventId(init?.body);
+  if (id === null || !diagWaiters.has(id)) return nativeFetch(input, init);
+  const size = requestSizeNote(init);
+  diagRequestNotes.set(id, size);
+  try {
+    return await nativeFetch(input, init);
+  } catch (e) {
+    const reason = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    diagRequestNotes.set(id, `${reason} · ${size}`);
+    throw e;
+  }
+};
+
+/** Sentry.init 뒤에 한 번 건다 — 진단 이벤트의 전송 단계 진입과 최종 결과를 받는다. */
+function watchDiagnosticDelivery(): void {
+  const client = Sentry.getClient();
+  if (!client) return;
+  client.on("beforeSendEvent", (event) => {
+    if (event.event_id && diagWaiters.has(event.event_id)) diagHandedToTransport.add(event.event_id);
+  });
+  client.on("afterSendEvent", (event, res) => {
+    const id = event.event_id;
+    const done = id ? diagWaiters.get(id) : undefined;
+    if (!id || !done) return;
+    diagWaiters.delete(id);
+    diagHandedToTransport.delete(id);
+    const note = diagRequestNotes.get(id);
+    diagRequestNotes.delete(id);
+    const status = res.statusCode;
+    if (status !== undefined) {
+      done({ ok: status >= 200 && status < 300, detail: `HTTP ${status}${note ? ` · ${note}` : ""}` });
+    } else {
+      // 응답 코드가 없다 = 요청이 실패했거나(사유는 note) SDK 가 보내지 않았다(속도 제한 등).
+      done({ ok: false, detail: note ?? "SDK 가 요청을 보내지 않음" });
+    }
+  });
+}
+
 /**
  * 최근 상황을 Sentry 로 한 번 올린다 (설정 화면 '진단 보내기').
  *
@@ -148,13 +248,13 @@ let lastDiagnosticAt = 0;
  * 보내는 것은 이 시점의 breadcrumb(최근 100건)과 매장 태그뿐이다.
  * 로그는 메모리에만 쌓이고 상한이 있어, 오래 켜뒀어도 양은 늘 같다.
  *
- * @returns 전송했으면 true. 수집이 꺼져 있거나 연타면 false.
+ * @returns 실제 전송 결과(서버 응답까지 기다린다). 수집이 꺼져 있거나 연타면 null.
  */
-export function sendDiagnostic(): boolean {
-  if (!SENTRY_DSN) return false;
+export function sendDiagnostic(): Promise<DiagnosticOutcome> | null {
+  if (!SENTRY_DSN) return null;
 
   const now = Date.now();
-  if (now - lastDiagnosticAt < DIAGNOSTIC_COOLDOWN_MS) return false;
+  if (now - lastDiagnosticAt < DIAGNOSTIC_COOLDOWN_MS) return null;
   lastDiagnosticAt = now;
 
   // 설정 화면(settings.html)은 포인트 화면과 실행 환경이 달라 breadcrumb 이 비어 있다.
@@ -163,9 +263,12 @@ export function sendDiagnostic(): boolean {
   const status  = readLinkStatus();
   const rx      = readTerminalRx();
 
-  Sentry.captureMessage("진단 보내기 — 사용자가 요청한 상태 보고", {
-    level: "info",
-    extra: {
+  // 결과를 받으려면 보내기 전에 이 이벤트의 id 를 알아야 한다.
+  // SDK 는 captureMessage 안에서 처리와 전송 요청까지 바로 이어서 하므로(동기), 기다릴 자리를 먼저 만든다.
+  const eventId = newEventId();
+  const outcome = new Promise<DiagnosticOutcome>((resolve) => diagWaiters.set(eventId, resolve));
+
+  Sentry.withScope((scope) => scope.setExtras({
       // 로그는 '일어난 일'만 남는다. 거래가 없던 동안에는 아무 줄도 없어서
       // 로그만으로는 지금 붙어 있는지 알 수 없다. 현재 값을 따로 싣는다.
       "현재 상태": [
@@ -210,9 +313,23 @@ export function sendDiagnostic(): boolean {
       ].join("\n"),
       ...linkLogExtra(linkLog),
       "기록 줄수": linkLog.length,
-    },
-  });
-  return true;
+  }).captureMessage("진단 보내기 — 사용자가 요청한 상태 보고", "info", { event_id: eventId }));
+
+  // 전송 단계로 넘어가지 않았다 = SDK 가 처리 중에 버렸다. 이때는 afterSendEvent 가 오지 않는다.
+  // 같은 화면에서 진단을 두 번 보내면 SDK 의 중복 제거(Dedupe)가 두 번째를 버리는 경우가 여기에 해당한다.
+  // (SDK 10.69 는 captureMessage 안에서 이 판단까지 동기로 끝낸다.)
+  if (!diagHandedToTransport.has(eventId)) {
+    diagWaiters.delete(eventId);
+    diagRequestNotes.delete(eventId);
+    return Promise.resolve({ ok: false, detail: "SDK 가 보내지 않음 (직전 진단과 같은 내용이라 중복으로 처리됐을 수 있음)" });
+  }
+  return outcome;
+}
+
+/** Sentry event_id 형식(하이픈 없는 32자리 16진수). */
+function newEventId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 export function initMonitoring(version: string): void {
@@ -255,7 +372,11 @@ export function initMonitoring(version: string): void {
 
     beforeSend:       (event) => scrub(event),
     beforeBreadcrumb: (crumb) => scrub(crumb),
+
+    // 기본 전송 방식 그대로이고, fetch 만 바꿔 끼운다 (keepalive 크기 보정 · 진단 결과 기록 — trackedFetch).
+    transport: (options) => Sentry.makeFetchTransport(options, trackedFetch),
   });
+  watchDiagnosticDelivery();
 
   log.debug(`[Sentry] 로그 수집 시작 — release=${PLUGIN_ID}@${version}`);
 }

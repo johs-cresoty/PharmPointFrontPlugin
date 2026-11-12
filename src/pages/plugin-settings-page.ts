@@ -123,16 +123,34 @@ export async function renderPluginSettingsPage(): Promise<void> {
   // 진단 보내기 — 약국에서 "안 된다"는 문의가 왔을 때 쓴다.
   // 연동이 안 되는 상황은 대부분 오류가 아니라 아무 일도 안 일어나는 상태라
   // 자동으로는 아무것도 올라가지 않는다. 눌러서 현재 상황을 보낸다.
-  document.getElementById("s-diag-row")!.addEventListener("click", () => {
+  // '보냈습니다' 는 Sentry 서버가 받았다고 응답했을 때만 띄운다. 실패하면 사유를 그대로 보여준다
+  // (로그 뷰어 콘솔에도 같은 줄을 남긴다).
+  let sending = false;
+  document.getElementById("s-diag-row")!.addEventListener("click", async () => {
+    if (sending) return;
     const label = document.getElementById("s-diag")!;
-    if (sendDiagnostic()) {
-      label.textContent = "보냈습니다";
-      sdk.template.openToast({ message: "진단 정보를 보냈습니다.", icon: "success" });
-    } else {
+    const pending = sendDiagnostic();
+    if (!pending) {
       // 연타했거나 수집이 꺼져 있는 경우. 어느 쪽이든 사용자가 할 일은 같다.
       label.textContent = "잠시 후 다시";
       sdk.template.openToast({ message: "잠시 후 다시 눌러주세요.", icon: "error" });
+      setTimeout(() => { label.textContent = "눌러서 전송"; }, 3000);
+      return;
     }
-    setTimeout(() => { label.textContent = "눌러서 전송"; }, 3000);
+    sending = true;
+    label.textContent = "보내는 중…";
+    const { ok, detail } = await pending;
+    sending = false;
+    if (ok) {
+      console.log(`[팜포인트] 진단 보내기 — Sentry 수신 확인 (${detail})`);
+      label.textContent = "보냈습니다";
+      sdk.template.openToast({ message: "진단 정보를 보냈습니다.", icon: "success" });
+    } else {
+      console.warn(`[팜포인트] 진단 보내기 — 전송 실패 (${detail})`);
+      label.textContent = `전송 실패: ${detail}`;
+      sdk.template.openToast({ message: "진단 정보를 보내지 못했어요.", icon: "error" });
+    }
+    // 실패 사유는 사진으로 남길 수 있게 오래 둔다.
+    setTimeout(() => { label.textContent = "눌러서 전송"; }, ok ? 3000 : 30000);
   });
 }
