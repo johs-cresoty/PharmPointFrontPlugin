@@ -22,7 +22,7 @@ import { renderResult } from "./pages/result";
 import { renderSettings } from "./pages/settings";
 import { renderPriceDisplay, saveCart, clearCart, updatePriceDisplay } from "./pages/price-display";
 import { hasCartToShow } from "./pos/cart-types";
-import { describeCartDisplay } from "./ui/PriceDisplayView";
+import { describeCartDisplay } from "./ui/price-display-model";
 import { renderBarcodeDisplay, saveBarcode, clearBarcode } from "./pages/barcode-display";
 import { log } from "./utils/log";
 import { onSettingsVisit } from "./monitoring/settings-visit";
