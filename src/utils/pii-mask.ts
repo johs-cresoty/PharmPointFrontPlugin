@@ -11,6 +11,20 @@ export function maskPhone(phone: string | null | undefined): string {
 }
 
 /**
+ * 고객 이름 화면 표시용 마스킹 — 첫 글자와 끝 글자만 남기고 가운데를 글자 수만큼 가린다.
+ *   "홍길동" → "홍*동"   "남궁민수" → "남**수"   "홍길" → "홍*"   "홍" → "*"
+ * 복성은 따로 다루지 않는다. 이미 가려진 값("홍*동")을 다시 넣어도 결과가 같다
+ * (서버가 가려서 보내도 그대로 쓸 수 있다). 네이버 플러그인 utils/piiMask.ts 와 같은 규칙.
+ */
+export function maskName(name: string | null | undefined): string {
+  const chars = Array.from((name ?? "").trim());
+  if (chars.length === 0) return "";
+  if (chars.length === 1) return "*";
+  if (chars.length === 2) return `${chars[0]}*`;
+  return `${chars[0]}${"*".repeat(chars.length - 2)}${chars[chars.length - 1]}`;
+}
+
+/**
  * 국내 휴대폰 번호 패턴 — 010/011/016/017/018/019 + 7~8자리.
  * 앞뒤가 숫자면 매칭하지 않는다(금액·승인번호 등 긴 숫자열 오탐 방지).
  */

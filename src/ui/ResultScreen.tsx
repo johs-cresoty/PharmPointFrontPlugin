@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { maskName } from "../utils/pii-mask";
 
 // 결과 화면 (조회 · 적립 완료 · 사용 완료 · 포인트 부족 · 마케팅 동의 완료).
 //
@@ -75,7 +76,9 @@ export default function ResultScreen(props: ResultScreenProps) {
   const isUnavailable = mode === "USE_UNAVAILABLE";
   // 마케팅 완료는 고객명 자리에 인사말. 고객명이 없을 때도(캣포스 007 등) 줄 높이는 남겨
   // 아래 배지가 디자인 위치에서 움직이지 않게 한다.
-  const nameLine = isMarketing ? "감사합니다" : props.customerName ? `${props.customerName} 님` : "";
+  // 고객 이름은 가려서 보인다(첫 · 끝 글자만 남김). 고객 화면이라 뒤에 선 사람도 볼 수 있다.
+  const maskedName = maskName(props.customerName);
+  const nameLine = isMarketing ? "감사합니다" : maskedName ? `${maskedName} 님` : "";
   const showMinPointNotice = isUnavailable && (props.minPoint ?? 0) > 0;
 
   return (
